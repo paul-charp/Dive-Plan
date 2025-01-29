@@ -4,6 +4,7 @@ from .Gradient import Gradient
 from ..utils import constants
 from ..Gas.Gas import Gas
 from ..Dive.DiveStep import DiveStep
+from ..utils import utils
 
 class ZHL16C_GF(AbstractDecoModel):
 
@@ -32,7 +33,7 @@ class ZHL16C_GF(AbstractDecoModel):
         super(ZHL16C_GF, self).__init__()
         
         # Initialize Compartements
-        self.compartments = ()
+        self.compartments = []
         
         for compConsts in self.MODEL_CONSTANTS:
             compartment = Compartment(
@@ -102,20 +103,20 @@ class ZHL16C_GF(AbstractDecoModel):
         
     def integrateModel(self, divestep: DiveStep):
         
-        for s in range(0, divestep.time, divestep.samplerate):
+        for s in utils.frange(0, divestep.time, divestep.samplerate):
             
             P_amb: float = divestep.get_P_amb_at_sample(s)
             
             for compartment in self.compartments:
                 self.__updateCompartment(compartment,
-                                         divestep.gas,
+                                         divestep.gas[0],
                                          P_amb,
-                                         divestep.sample_rate)
+                                         divestep.samplerate)
 
 
     def getCeiling(self) -> float:
         ceiling: float = -1
-        
+
         for compartment in self.compartments:
             ceiling = max(ceiling, compartment.P_tol)
             

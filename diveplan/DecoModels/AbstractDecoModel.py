@@ -11,7 +11,7 @@ class AbstractDecoModel():
         pass
 
 
-    def getCeilling(self):
+    def getCeiling(self):
         pass
     
 

@@ -38,4 +38,3 @@ class Gas():
     def consume(self, P_amb: float, time: float, sac: float):
         self.consumption += P_amb * time * sac    
     
-    
