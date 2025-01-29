@@ -42,6 +42,8 @@ class Dive():
                                 utils.P_amb_to_depth(ceil),
                                 self.gases[0])
             
+            print(f'STEP : time {asc_step.time} -> {asc_step.start_depth}m to {asc_step.end_depth}m')
+            
             self.decomodel.integrateModel(asc_step)
             P_amb = ceil
     
