@@ -1,17 +1,20 @@
+from ..Gas.Gas import Gas
+from .DiveStep import DiveStep
+from .. import utils
+
 class Dive():
     """docstring for Dive."""
     def __init__(self, planned_steps):
         super(Dive, self).__init__()
 
         for step in planned_steps:
-            self.steps.append(Divestep(step))
+            self.steps.append(DiveStep(step))
             
-        self.ascend = [Divesteps,]
-        self.gases = [Gas,]
+        self.ascend: tuple[DiveStep] = ()
+        self.gases: list[Gas] = []
         self.GF = (80/80)
         self.bottom_sac = 20
         self.deco_sac = 15
-        self.compartments = [Compartment, ]
         self.samplerate = 1
         
     
@@ -22,7 +25,4 @@ class Dive():
         pass
     
     def calc_rockbottom():
-        pass
-    
-    def report() -> DiveReport:
         pass
