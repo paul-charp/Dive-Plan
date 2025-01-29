@@ -102,11 +102,9 @@ class ZHL16C_GF(AbstractDecoModel):
         
     def integrateModel(self, divestep: DiveStep):
         
-        samples = divestep.time * divestep.sample_rate
-        
-        for i in range(samples):
+        for s in range(0, divestep.time, divestep.samplerate):
             
-            P_amb: float = divestep.get_P_amb_at_sample(i)
+            P_amb: float = divestep.get_P_amb_at_sample(s)
             
             for compartment in self.compartments:
                 self.__updateCompartment(compartment,
