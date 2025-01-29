@@ -1,2 +1,5 @@
 # dive-plan
- 
+
+[!CAUTION]
+DO NOT USE FOR REAL WORLD DIVE PLANNING
+    
