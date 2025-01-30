@@ -91,6 +91,8 @@ class Dive():
                 
             self.steps.append(step)
         
+        print(self.decomodel.NAME, self.GF)
+        
         for step in self.steps:
             
             symbol = SYMBOL_MAP[step.type]
