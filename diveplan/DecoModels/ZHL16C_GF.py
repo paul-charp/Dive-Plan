@@ -4,7 +4,6 @@ from .Gradient import Gradient
 from ..utils import constants
 from ..Gas import Gas
 from ..Dive import DiveStep
-from ..utils import utils
 
 class ZHL16C_GF(AbstractDecoModel):
 
@@ -29,8 +28,8 @@ class ZHL16C_GF(AbstractDecoModel):
 
     NAME = 'Buhlmann ZHL16-C + GF'
     
-    def __init__(self, GFs):
-        super(ZHL16C_GF, self).__init__()
+    def __init__(self, GFs, samplerate):
+        super(ZHL16C_GF, self).__init__(samplerate)
         
         # Initialize Compartments
         self.compartments = []
@@ -96,21 +95,18 @@ class ZHL16C_GF(AbstractDecoModel):
         )
         
         return compartment
+    
+    def _integrateModel(self, divestep: DiveStep, s: float):
         
+        P_amb: float = divestep.get_P_amb_at_sample(s)
+        self.P_deep = max(self.P_deep, P_amb)
+    
         
-    def integrateModel(self, divestep: DiveStep):
-        
-        for s in utils.frange(0, divestep.time, divestep.samplerate):
-            
-            P_amb: float = divestep.get_P_amb_at_sample(s)
-            self.P_deep = max(self.P_deep, P_amb)
-        
-            
-            for compartment in self.compartments:
-                self.__updateCompartment(compartment,
-                                         divestep.gas[0],
-                                         P_amb,
-                                         divestep.samplerate)
+        for compartment in self.compartments:
+            self.__updateCompartment(compartment,
+                                        divestep.gas[0],
+                                        P_amb,
+                                        self.samplerate)
 
 
     def getCeiling(self) -> float:

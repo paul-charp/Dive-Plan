@@ -1,10 +1,10 @@
-from diveplan import Dive, DiveStep, Gas
+from diveplan.Dive import Dive, DiveStep
+from diveplan.Gas import Gas
 
 air = Gas()
 
 dive = Dive([
-    DiveStep(0, 0.1, 0, 40, air),
-    DiveStep(23, 0.1, 40, 40, air)
+    DiveStep(23, 40, 40, air)
     ])
 
 dive.GF = (80, 80)

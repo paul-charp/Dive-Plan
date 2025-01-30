@@ -1,4 +1,4 @@
-from . import DiveStep
+from .DiveStep import DiveStep
 from ..Gas import Gas
 from ..DecoModels import ZHL16C_GF
 from .. import utils
@@ -18,12 +18,12 @@ class Dive():
         self.GF = (100, 100)
         self.bottom_sac = 20
         self.deco_sac = 15
-        self.samplerate = 1
+        self.samplerate = 0.1
         
         self.initDecoModel()
         
     def initDecoModel(self):
-        self.decomodel: ZHL16C_GF = ZHL16C_GF(self.GF)
+        self.decomodel: ZHL16C_GF = ZHL16C_GF(self.GF, self.samplerate)
     
     def calc_ascend(self):
         bottom_depth = self.steps[-1].end_depth
@@ -39,20 +39,33 @@ class Dive():
             if P_amb == ceil:
                 time = 1
                 
-            asc_step = DiveStep(time,
-                                0.1, 
+            asc_step = DiveStep(time, 
                                 utils.P_amb_to_depth(P_amb),
                                 utils.P_amb_to_depth(ceil),
                                 self.gases[0])
             
             self.ascend.append(asc_step)
             
-            self.decomodel.integrateModel(asc_step)
+            self.decomodel.integrateDiveStep(asc_step)
             P_amb = utils.depth_to_P_amb(asc_step.end_depth)
     
     def calc_steps(self):
+        
+        first_step = self.steps[0]
+        
+        if first_step.start_depth != 0:
+            self.steps.insert(0,
+                              DiveStep(
+                                  0,
+                                  0,
+                                  first_step.start_depth,
+                                  first_step.gas[0]
+                              ))
+            
+            self.steps[1].time -= self.steps[0].time
+        
         for step in self.steps:
-            self.decomodel.integrateModel(step)
+            self.decomodel.integrateDiveStep(step)
     
     def calc_rockbottom():
         pass
