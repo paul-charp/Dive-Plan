@@ -1,6 +1,4 @@
-from diveplan.Dive.Dive import Dive
-from diveplan.Dive.DiveStep import DiveStep
-from diveplan.Gas.Gas import Gas
+from diveplan import Dive, DiveStep, Gas
 
 air = Gas()
 
