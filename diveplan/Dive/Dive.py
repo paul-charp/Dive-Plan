@@ -4,6 +4,7 @@ from ..DecoModels.ZHL16C_GF import ZHL16C_GF
 from ..DecoModels.AbstractDecoModel import AbstractDecoModel
 from .. import utils
 
+
 class Dive():
     """docstring for Dive."""
     def __init__(self, planned_steps):
@@ -13,13 +14,16 @@ class Dive():
         for step in planned_steps:
             self.steps.append(step)
             
-        self.ascend: tuple[DiveStep] = []
+        self.ascend: list[DiveStep] = []
         self.gases: list[Gas] = [Gas()]
-        self.GF = (80, 80)
+        self.GF = (100, 100)
         self.bottom_sac = 20
         self.deco_sac = 15
         self.samplerate = 1
         
+        self.initDecoModel()
+        
+    def initDecoModel(self):
         self.decomodel: ZHL16C_GF = ZHL16C_GF(self.GF)
     
     def calc_ascend(self):
@@ -33,7 +37,7 @@ class Dive():
             )
             
             time = 0 
-            if P_amb >= ceil:
+            if P_amb == ceil:
                 time = 1
                 
             asc_step = DiveStep(time,
@@ -42,10 +46,10 @@ class Dive():
                                 utils.P_amb_to_depth(ceil),
                                 self.gases[0])
             
-            print(f'STEP : time {asc_step.time} -> {asc_step.start_depth}m to {asc_step.end_depth}m')
+            self.ascend.append(asc_step)
             
             self.decomodel.integrateModel(asc_step)
-            P_amb = ceil
+            P_amb = utils.depth_to_P_amb(asc_step.end_depth)
     
     def calc_steps(self):
         for step in self.steps:
@@ -53,3 +57,33 @@ class Dive():
     
     def calc_rockbottom():
         pass
+    
+    
+    def report(self):
+        runtime = 0
+        
+        SYMBOL_MAP = {
+            'descent': '▼',
+            'ascent': '▲',
+            'const': '-'
+        }
+        
+        for i, step in enumerate(self.ascend):
+            if step.type == 'const' and i != 0:
+                
+                p_step = self.ascend[i-1]
+                
+                if (step.start_depth == p_step.end_depth) and (p_step.type == 'const'):
+                    self.steps[-1].time += step.time
+                    continue
+                
+            self.steps.append(step)
+        
+        for step in self.steps:
+            
+            symbol = SYMBOL_MAP[step.type]
+            depth = round(step.end_depth)
+            time = round(step.time)
+            runtime += round(time)
+            
+            print(f'{symbol} {depth}m {time}min {runtime}min')

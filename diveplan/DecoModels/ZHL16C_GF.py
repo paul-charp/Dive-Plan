@@ -32,7 +32,7 @@ class ZHL16C_GF(AbstractDecoModel):
     def __init__(self, GFs):
         super(ZHL16C_GF, self).__init__()
         
-        # Initialize Compartements
+        # Initialize Compartments
         self.compartments = []
         
         for compConsts in self.MODEL_CONSTANTS:
@@ -61,27 +61,24 @@ class ZHL16C_GF(AbstractDecoModel):
     @staticmethod
     def __calcInertGasLimit(ppN2, ppHe, a_N2, b_N2, a_He, b_He, P_amb, GF):
         
-        P_inert = ppN2 # + ppHe
+        P_inert = ppN2 + ppHe
         r = ppHe / P_inert
         
-        a = a_N2 #* (1 - r) + a_He * r
-        b = b_N2 #* (1 - r) + b_He * r
+        a = a_N2 * (1 - r) + a_He * r
+        b = b_N2 * (1 - r) + b_He * r
         
         P_tol = (P_inert - a) * b
-        
-        return P_tol #P_amb + GF * (P_tol - P_amb)
+        return P_amb + GF * (P_tol - P_amb)
         
         
     def __updateCompartment(self, compartment: Compartment, gas: Gas, P_amb: float, time: float) -> Compartment:
         
-        self.P_deep = max(self.P_deep, P_amb)
-        
         gas_ppN2 = gas.ppN2(P_amb)
-        #gas_ppHe = gas.ppHe(P_amb)
+        gas_ppHe = gas.ppHe(P_amb)
         
         # Update Inert Gas Pressures
         compartment.ppN2 = self.__calcInertGasPressure(compartment.ppN2, gas_ppN2, time, compartment.h_N2)
-        #compartment.ppHe = self.__calcInertGasPressure(compartment.ppHe, gas_ppHe, time, compartment.h_He)
+        compartment.ppHe = self.__calcInertGasPressure(compartment.ppHe, gas_ppHe, time, compartment.h_He)
         
         # Calc GF at P_amb
         gf = self.GFs.getGF(P_amb, self.P_deep)
@@ -106,6 +103,8 @@ class ZHL16C_GF(AbstractDecoModel):
         for s in utils.frange(0, divestep.time, divestep.samplerate):
             
             P_amb: float = divestep.get_P_amb_at_sample(s)
+            self.P_deep = max(self.P_deep, P_amb)
+        
             
             for compartment in self.compartments:
                 self.__updateCompartment(compartment,

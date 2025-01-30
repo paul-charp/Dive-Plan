@@ -6,8 +6,8 @@ class Gradient():
     def __init__(self, gfs: tuple[int]):
         super(Gradient, self).__init__()
         
-        self.gf_lo: int = gfs[0]
-        self.gf_hi: int = gfs[1]
+        self.gf_lo: float = gfs[0] * 0.01
+        self.gf_hi: float = gfs[1] * 0.01
 
     def getGF(self, P_amb: float, P_deep: float, P_atm=constants.P_ATM) -> float:
         
