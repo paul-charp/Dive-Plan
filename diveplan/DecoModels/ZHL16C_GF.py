@@ -2,8 +2,8 @@ from .AbstractDecoModel import AbstractDecoModel
 from .Compartment import Compartment
 from .Gradient import Gradient
 from ..utils import constants
-from ..Gas.Gas import Gas
-from ..Dive.DiveStep import DiveStep
+from ..Gas import Gas
+from ..Dive import DiveStep
 from ..utils import utils
 
 class ZHL16C_GF(AbstractDecoModel):

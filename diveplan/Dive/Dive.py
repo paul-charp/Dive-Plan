@@ -1,7 +1,6 @@
-from ..Gas.Gas import Gas
-from .DiveStep import DiveStep
-from ..DecoModels.ZHL16C_GF import ZHL16C_GF
-from ..DecoModels.AbstractDecoModel import AbstractDecoModel
+from . import DiveStep
+from ..Gas import Gas
+from ..DecoModels import ZHL16C_GF
 from .. import utils
 
 
