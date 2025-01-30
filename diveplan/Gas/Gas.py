@@ -13,6 +13,16 @@ class Gas():
         self.frac_N2 = 1 - (frac_O2 + frac_He)
         
         self.consumption: float = 0
+        
+    def __repr__(self):
+        if self.frac_He != constants.AIR_FHE:
+            return f'Tx{self.frac_O2 * 100}/{self.frac_He * 100}'
+        
+        elif (self.frac_N2 == constants.AIR_FN2) and (self.frac_O2 == constants.AIR_FO2):
+            return 'Air'
+        
+        else:
+            return f'Nx{self.frac_O2 * 100}'
   
         
     def ppO2(self, P_amb: float) -> float:
@@ -31,7 +41,7 @@ class Gas():
         return self.ppN2(P_amb) / constants.AIR_FO2
 
 
-    def maxOperatingPressure(self, max_ppO2: float=1.6):
+    def maxOperatingPressure(self, max_ppO2: float=1.61362):
         return max_ppO2 / self.frac_O2
     
     
