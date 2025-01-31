@@ -15,8 +15,8 @@ WATER_DENSITY = 1020
 G = 9.81
 P_ATM = 1.01325
 
-ASC_RATE = 10 # m/min
-DES_RATE = 20 # m/min
+ASC_RATE = 10  # m/min
+DES_RATE = 20  # m/min
 STOP_INC = 3
 LAST_STOP = 6
 MIN_PPO2 = 0.18
