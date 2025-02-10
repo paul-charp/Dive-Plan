@@ -1,5 +1,6 @@
-from diveplan.utils import utils
 from diveplan.utils import constants
+from diveplan.core.pressure import Pressure
+from diveplan.core.gas import Gas
 
 
 class DiveStep:
@@ -10,7 +11,7 @@ class DiveStep:
 
         self.start_depth = start_depth
         self.end_depth = end_depth
-        self.gas = [gas]
+        self.gas: list[Gas] = [gas]
 
         if time == 0:
 
@@ -49,4 +50,4 @@ class DiveStep:
             self.end_depth - self.start_depth
         )
 
-        return utils.depth_to_P_amb(depth_at_sample)
+        return Pressure.from_depth(depth_at_sample)

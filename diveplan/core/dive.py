@@ -1,7 +1,8 @@
-from diveplan.Dive.DiveStep import DiveStep
-from diveplan.Gas import Gas
-from diveplan.DecoModels import ZHL16C_GF
+from diveplan.core.divestep import DiveStep
+from diveplan.core.gas import Gas
+from diveplan.core.decomodels.zhl16c_gf import ZHL16C_GF
 from diveplan.utils import utils
+from diveplan.core.pressure import Pressure
 
 
 class Dive:
@@ -28,11 +29,11 @@ class Dive:
 
     def calc_ascend(self):
         bottom_depth = self.steps[-1].end_depth
-        P_amb = utils.depth_to_P_amb(bottom_depth)
-        P_surf = utils.depth_to_P_amb(0)
+        P_amb: Pressure = Pressure.from_depth(bottom_depth)
+        P_surf: Pressure = Pressure.from_depth(0)
 
         while P_amb > P_surf:
-            ceil = utils.round_to_stop_P(self.decomodel.getCeiling())
+            ceil: Pressure = utils.round_to_stop_P(self.decomodel.getCeiling())
 
             time = 0
             if P_amb == ceil:
@@ -40,15 +41,15 @@ class Dive:
 
             asc_step = DiveStep(
                 time,
-                utils.P_amb_to_depth(P_amb),
-                utils.P_amb_to_depth(ceil),
+                P_amb.to_depth(),
+                ceil.to_depth(),
                 self.gases[0],
             )
 
             self.ascend.append(asc_step)
 
             self.decomodel.integrateDiveStep(asc_step)
-            P_amb = utils.depth_to_P_amb(asc_step.end_depth)
+            P_amb: Pressure = Pressure.from_depth(asc_step.end_depth)
 
     def calc_steps(self):
 

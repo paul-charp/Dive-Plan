@@ -1,4 +1,5 @@
-from diveplan.Gas import Gas
+from diveplan.core.gas import Gas
+from diveplan.core.pressure import Pressure
 from diveplan.utils import constants
 from diveplan.utils import utils
 
@@ -29,7 +30,7 @@ class GasPlan:
     @staticmethod
     def makeBestMix(P_amb: float, END: float = 30, ppO2: float = 1.61362):
 
-        P_end = utils.depth_to_P_amb(END)
+        P_end = Pressure.from_depth(END)
         ppN2 = P_end * constants.AIR_FN2
 
         frac_O2 = ppO2 / P_amb

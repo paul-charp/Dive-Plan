@@ -1,3 +1,4 @@
+from diveplan.core.pressure import Pressure
 from diveplan.utils import constants
 
 
@@ -26,20 +27,20 @@ class Gas:
         else:
             return f"Nx{self.frac_O2 * 100}"
 
-    def ppO2(self, P_amb: float) -> float:
+    def ppO2(self, P_amb: Pressure) -> Pressure:
         return P_amb * self.frac_O2
 
-    def ppN2(self, P_amb: float) -> float:
+    def ppN2(self, P_amb: Pressure) -> Pressure:
         return P_amb * self.frac_N2
 
-    def ppHe(self, P_amb: float) -> float:
+    def ppHe(self, P_amb: Pressure) -> Pressure:
         return P_amb * self.frac_He
 
-    def equivalentNarcoticPressure(self, P_amb: float) -> float:
+    def equivalentNarcoticPressure(self, P_amb: Pressure) -> Pressure:
         return self.ppN2(P_amb) / constants.AIR_FO2
 
-    def maxOperatingPressure(self, max_ppO2: float = 1.61362):
+    def maxOperatingPressure(self, max_ppO2: Pressure = Pressure(1.61362)):
         return max_ppO2 / self.frac_O2
 
-    def consume(self, P_amb: float, time: float, sac: float):
-        self.consumption += P_amb * time * sac
+    def consume(self, P_amb: Pressure, time: float, sac: float):
+        self.consumption += float(P_amb) * time * sac
