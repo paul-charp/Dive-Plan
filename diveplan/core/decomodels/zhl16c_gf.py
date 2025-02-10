@@ -231,9 +231,7 @@ class ZHL16C_GF(AbstractDecoModel):
         self.P_deep = max(self.P_deep, P_amb)
 
         for compartment in self.compartments:
-            self.__updateCompartment(
-                compartment, divestep.gas[0], P_amb, self.samplerate
-            )
+            self.__updateCompartment(compartment, divestep.gas, P_amb, self.samplerate)
 
     def getCeiling(self) -> Pressure:
         ceiling: Pressure = Pressure(0)

@@ -6,12 +6,14 @@ from diveplan.core.gas import Gas
 class DiveStep:
     """docstring for DiveStep."""
 
+    SYMBOL_MAP = {"descent": "▼", "ascent": "▲", "const": "-"}
+
     def __init__(self, time, start_depth, end_depth, gas):
         super(DiveStep, self).__init__()
 
         self.start_depth = start_depth
         self.end_depth = end_depth
-        self.gas: list[Gas] = [gas]
+        self.gas: Gas = gas
 
         if time == 0:
 
@@ -51,3 +53,13 @@ class DiveStep:
         )
 
         return Pressure.from_depth(depth_at_sample)
+
+    def __repr__(self) -> str:
+
+        symbol = self.SYMBOL_MAP[self.type]
+        start_depth = round(self.start_depth)
+        end_depth = round(self.end_depth)
+        time = round(self.time)
+        gas = self.gas
+
+        return f"{start_depth}m {symbol} {end_depth}m {time}min {gas}"
