@@ -77,3 +77,19 @@ def simplify_divesteps(divesteps: list[DiveStep]) -> list[DiveStep]:
             break
 
     return new_divesteps
+
+
+def meters_to_feet(value: float) -> float:
+    return value * 3.28084
+
+
+def feet_to_meters(value: float) -> float:
+    return value / 3.28084
+
+
+def bar_to_psi(value: float) -> float:
+    return value * 14.5038
+
+
+def psi_to_bar(value: float) -> float:
+    return value / 14.5038
