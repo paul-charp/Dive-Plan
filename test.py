@@ -4,6 +4,7 @@ from diveplan.core.gas import Gas
 from diveplan.core.gasplan import GasPlan
 from diveplan.core.pressure import Pressure
 
+"""
 gasplan = GasPlan([Gas(), Gas(0.5), Gas(1.0)])
 
 depths = [40, 12, 28, 5, 3, 7]
@@ -26,8 +27,7 @@ for depth in depths:
         P, gas = gas_switch
         print(f"switch at {P.to_depth()}m for {gas}")
 
-
-exit()
+"""
 air = Gas()
 nx50 = Gas(0.5)
 gases = [air, nx50]
