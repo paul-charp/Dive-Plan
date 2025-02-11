@@ -8,6 +8,7 @@ class GasPlan:
 
     def __init__(self, gases):
         super(GasPlan, self).__init__()
+
         self.gases: list[Gas] = gases
 
     def bestGases(self, P_amb: Pressure) -> list[Gas]:
@@ -39,16 +40,23 @@ class GasPlan:
 
         return Gas(round(frac_O2, 2), round(frac_He, 2))
 
-    def getNextGasSwitch(self, P_amb: Pressure) -> tuple[Pressure, Gas]:
+    def getNextGasSwitch(
+        self, P_amb: Pressure, current_gas: Gas, P_surf: Pressure = constants.P_ATM
+    ) -> list[tuple[Pressure, Gas]]:
 
-        best_gases: list[Gas] = self.bestGases(P_amb)
+        best_gas: Gas = None
 
-        if len(best_gases) <= 1:
-            return (None, None)
+        gas_switches: list[tuple[Pressure, Gas]] = []
 
-        switch_P: Pressure = (
-            best_gases[1].maxOperatingPressure().round_to_shallower_depth_inc()
-        )
-        best_gas = best_gases[1]
+        while P_amb > P_surf:
 
-        return (switch_P, best_gas)
+            P_amb = P_amb.round_to_shallower_depth_inc()
+            best_gas = self.bestGases(P_amb)[0]
+
+            if best_gas != current_gas:
+                gas_switches.append((P_amb, best_gas))
+                current_gas = best_gas
+
+            P_amb -= 0.1  # Dynamicaly define this from depth increment. Or make a method 'next depth inc'
+
+        return gas_switches
