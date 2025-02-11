@@ -1,18 +1,19 @@
+from abc import ABC, abstractmethod
+
 from diveplan.core.divestep import DiveStep
 from diveplan.core import utils
-
-from abc import ABC, abstractmethod
+from diveplan.core.pressure import Pressure
 
 
 class AbstractDecoModel(ABC):
-    """docstring for DecoModel."""
 
     NAME = ""
 
-    def __init__(self, samplerate):
+    def __init__(self, samplerate: float, parms: dict = {}):
         super(AbstractDecoModel, self).__init__()
 
         self.samplerate = samplerate
+        self.parms = parms
 
     @property
     def samplerate(self):
@@ -39,5 +40,5 @@ class AbstractDecoModel(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def getCeiling(self) -> float:
+    def getCeiling(self) -> Pressure:
         raise NotImplementedError()

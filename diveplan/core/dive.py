@@ -1,31 +1,41 @@
+from diveplan.core import constants
+from diveplan.core.decomodels.abstract_deco_model import AbstractDecoModel
 from diveplan.core.divestep import DiveStep
 from diveplan.core.gas import Gas
-from diveplan.core.decomodels.zhl16c_gf import ZHL16C_GF
 from diveplan.core.gasplan import GasPlan
 from diveplan.core.pressure import Pressure
+from diveplan.core.utils import find_decomodels
 
 
 class Dive:
     """docstring for Dive."""
 
-    def __init__(self, planned_steps, gases):
+    def __init__(
+        self,
+        planned_steps: list[DiveStep],
+        gases: list[Gas],
+        decomodel_name: str,
+        decomodel_parms: dict = {},
+        decomodel_samplerate: float = constants.SAMPLE_RATE,
+    ):
         super(Dive, self).__init__()
 
-        self.steps = []
+        self.steps: list[DiveStep] = []
         for step in planned_steps:
             self.steps.append(step)
 
         self.ascend: list[DiveStep] = []
         self.gases: list[Gas] = gases
-        self.GF = (100, 100)
-        self.bottom_sac = 20
-        self.deco_sac = 15
-        self.samplerate = 0.1
 
-        self.initDecoModel()
+        DecoModel = find_decomodels().get(decomodel_name)
 
-    def initDecoModel(self):
-        self.decomodel: ZHL16C_GF = ZHL16C_GF(self.GF, self.samplerate)
+        if DecoModel is not None:
+            self.decomodel: AbstractDecoModel = DecoModel(
+                decomodel_samplerate, decomodel_parms
+            )
+
+        else:
+            raise ValueError(f"DecoModel '{decomodel_name}' not found !")
 
     def calc_ascend(self):
         bottom_depth = self.steps[-1].end_depth
@@ -102,7 +112,7 @@ class Dive:
 
         self.steps.extend(self.ascend)
 
-        print(self.decomodel.NAME, self.GF)
+        print(self.decomodel)
 
         for step in self.steps:
 

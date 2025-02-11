@@ -141,13 +141,19 @@ class ZHL16C_GF(AbstractDecoModel):
     ]
 
     NAME = "Buhlmann ZHL16-C + GF"
+    _DEFAULT_GF = (80, 80)
 
-    def __init__(self, GFs, samplerate):
+    def __init__(self, samplerate: float, parms: dict):
         super(ZHL16C_GF, self).__init__(samplerate)
 
         self._initCompartments()
 
-        self.GFs = Gradient(GFs)
+        if parms.get("GF") is not None:
+            self.GFs: Gradient = Gradient(parms.get("GF"))
+
+        else:
+            self.GFs: Gradient = Gradient(self._DEFAULT_GF)
+
         self.P_deep: Pressure = Pressure(constants.P_ATM)
 
     def _initCompartments(self):
@@ -240,3 +246,6 @@ class ZHL16C_GF(AbstractDecoModel):
             ceiling = max(ceiling, compartment.P_tol)
 
         return ceiling
+
+    def __repr__(self) -> str:
+        return f"{self.NAME} ({self.GFs})"
