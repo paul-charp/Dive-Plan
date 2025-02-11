@@ -9,8 +9,12 @@ class GasPlan:
         super(GasPlan, self).__init__()
 
         # Remove duplicate gases
-        gases = list(dict.fromkeys(gases))
-        self.gases: list[Gas] = gases
+        unique_gases = []
+        for gas in gases:
+            if gas not in unique_gases:
+                unique_gases.append(gas)
+
+        self.gases: list[Gas] = unique_gases
 
     def bestGases(self, P_amb: Pressure) -> list[Gas]:
 
