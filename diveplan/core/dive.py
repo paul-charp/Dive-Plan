@@ -4,7 +4,7 @@ from diveplan.core.divestep import DiveStep
 from diveplan.core.gas import Gas
 from diveplan.core.gasplan import GasPlan
 from diveplan.core.pressure import Pressure
-from diveplan.core.utils import find_decomodels
+from diveplan.core.utils import find_decomodels, simplify_divesteps
 
 
 class Dive:
@@ -43,29 +43,13 @@ class Dive:
         P_surf: Pressure = Pressure.from_depth(0)
         gas: Gas = self.steps[-1].gas
 
-        gasplan = GasPlan(self.gases)
-
         while P_amb > P_surf:
 
-            deco_ceil: Pressure = (
-                self.decomodel.getCeiling().round_to_deeper_depth_inc()
-            )
-
-            switch_P, next_gas = gasplan.getNextGasSwitch(P_amb)
-            # print(switch_P.to_depth(), next_gas)
-
-            if (next_gas != None) and (next_gas != gas) and (deco_ceil <= switch_P):
-                ceil = switch_P
-
-            else:
-                ceil = deco_ceil
+            ceil: Pressure = self.decomodel.getCeiling().round_to_deeper_depth_inc()
 
             time = 0
             if P_amb == ceil:
                 time = 1
-
-                if next_gas != None:
-                    gas = next_gas
 
             asc_step = DiveStep(
                 time,
@@ -75,8 +59,6 @@ class Dive:
             )
 
             self.ascend.append(asc_step)
-
-            print(asc_step)  # FOR DEBUG
 
             self.decomodel.integrateDiveStep(asc_step)
             P_amb: Pressure = Pressure.from_depth(asc_step.end_depth)
@@ -99,18 +81,8 @@ class Dive:
     def report(self):
         runtime = 0
 
-        for i, step in enumerate(self.ascend):
-            if step.type == "const" and i != 0:
-
-                p_step = self.ascend[i - 1]
-
-                if (step.start_depth == p_step.end_depth) and (p_step.type == "const"):
-                    self.steps[-1].time += step.time
-                    continue
-
-            self.steps.append(step)
-
-        self.steps.extend(self.ascend)
+        asc_step = simplify_divesteps(self.ascend)
+        self.steps.extend(asc_step)
 
         print(self.decomodel)
 
