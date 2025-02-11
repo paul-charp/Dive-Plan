@@ -3,8 +3,6 @@ from diveplan.core import constants
 
 
 class Gradient:
-    """docstring for Gradient."""
-
     def __init__(self, gfs: tuple[int]):
         super(Gradient, self).__init__()
 
@@ -15,7 +13,7 @@ class Gradient:
         self,
         P_amb: Pressure,
         P_deep: Pressure,
-        P_atm: Pressure = Pressure(constants.P_ATM),
+        P_atm: Pressure = constants.P_ATM,
     ) -> float:
 
         if P_deep - P_atm == 0:
@@ -24,3 +22,9 @@ class Gradient:
         return self.gf_lo + float((P_amb - P_atm) / (P_deep - P_atm)) * (
             self.gf_hi - self.gf_lo
         )
+
+    def __repr__(self) -> str:
+        gf_lo: int = int(self.gf_lo * 100)
+        gf_hi: int = int(self.gf_hi * 100)
+
+        return f"{gf_lo}/{gf_hi}"
