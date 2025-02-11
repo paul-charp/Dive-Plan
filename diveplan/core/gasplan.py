@@ -1,7 +1,6 @@
 from diveplan.core.gas import Gas
 from diveplan.core.pressure import Pressure
-from diveplan.utils import constants
-from diveplan.utils.utils import round_to_gas_switch_P
+from diveplan.core import constants
 
 
 class GasPlan:

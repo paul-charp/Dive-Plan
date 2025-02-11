@@ -1,5 +1,5 @@
 from diveplan.core.divestep import DiveStep
-from diveplan.utils import utils
+from diveplan.core import utils
 
 from abc import ABC, abstractmethod
 

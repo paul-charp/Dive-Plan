@@ -2,7 +2,6 @@ from diveplan.core.divestep import DiveStep
 from diveplan.core.gas import Gas
 from diveplan.core.decomodels.zhl16c_gf import ZHL16C_GF
 from diveplan.core.gasplan import GasPlan
-from diveplan.utils import utils
 from diveplan.core.pressure import Pressure
 
 

@@ -1,19 +1,21 @@
 import math
 
-from diveplan.utils import constants
+from diveplan.core import constants
 
 
 class Pressure(float):
     """
     Wrapper around float type.
     Minimal implementation, assumes that the float base type is dealing with most of the error handling.
+    While pressure cannot be physicaly negative, for deco calculation it's possible possible to have negative value.
+
     """
 
     _PRECISION = 5
 
     def __new__(cls, value: float):
 
-        # cls._validate_value(value)
+        # cls._validate_value(value) # Disable check for negative value causing error in deco calculations
 
         value = round(value, cls._PRECISION)
         value = float(value)

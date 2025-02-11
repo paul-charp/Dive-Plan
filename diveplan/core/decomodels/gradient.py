@@ -1,5 +1,5 @@
 from diveplan.core.pressure import Pressure
-from diveplan.utils import constants
+from diveplan.core import constants
 
 
 class Gradient:
@@ -11,7 +11,12 @@ class Gradient:
         self.gf_lo: float = gfs[0] * 0.01
         self.gf_hi: float = gfs[1] * 0.01
 
-    def getGF(self, P_amb: Pressure, P_deep: Pressure, P_atm : Pressure = Pressure(constants.P_ATM)) -> float:
+    def getGF(
+        self,
+        P_amb: Pressure,
+        P_deep: Pressure,
+        P_atm: Pressure = Pressure(constants.P_ATM),
+    ) -> float:
 
         if P_deep - P_atm == 0:
             return self.gf_hi

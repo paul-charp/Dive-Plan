@@ -1,5 +1,6 @@
-from diveplan.utils import constants
+from diveplan.core import constants
 from diveplan.core.pressure import Pressure
+
 
 class Compartment:
     """docstring for Compartment."""

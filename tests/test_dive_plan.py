@@ -1,7 +1,7 @@
 import pytest
 from diveplan.Dive import Dive, DiveStep
 from diveplan.Gas import Gas, GasPlan
-from diveplan.utils import utils
+from diveplan.core import utils
 
 
 # Test de la conversion de profondeur en pression ambiante

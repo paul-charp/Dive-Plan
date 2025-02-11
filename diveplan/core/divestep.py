@@ -1,4 +1,4 @@
-from diveplan.utils import constants
+from diveplan.core import constants
 from diveplan.core.pressure import Pressure
 from diveplan.core.gas import Gas
 

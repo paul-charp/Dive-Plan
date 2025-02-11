@@ -1,7 +1,7 @@
 from diveplan.core.dive import Dive
 from diveplan.core.divestep import DiveStep
 from diveplan.core.gas import Gas
-from diveplan.utils.utils import round_to_gas_switch_P
+from diveplan.core.utils import round_to_gas_switch_P
 
 air = Gas()
 nx50 = Gas(0.5)
