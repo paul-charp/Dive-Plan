@@ -178,7 +178,11 @@ class Gas:
 
     def __eq__(self, other: "Gas") -> bool:
         try:
-            return (self.frac_O2 == other.frac_O2) and (self.frac_He == other.frac_He)
+            return (
+                (self.frac_O2 == other.frac_O2)
+                and (self.frac_He == other.frac_He)
+                and isinstance(other, Gas)
+            )
         except:
             return False
 
