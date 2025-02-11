@@ -3,17 +3,157 @@ from diveplan.core import constants
 
 
 class Gas:
+    """
+    Gas Mixture Defined by fixed fraction of Oxygen, Nitrogen and Helium.
+    Nitrogen makes up the rest of the gas.
+
+    Args:
+        frac_O2 (float=constants.AIR_FO2): Fraction of Oxygen (O2) in gas (0 to 1).
+        frac_He (float=constants.AIR_FHE): Fraction of Helium (He) in gas (0 to 1).
+
+    """
+
     def __init__(
         self, frac_O2: float = constants.AIR_FO2, frac_He: float = constants.AIR_FHE
     ):
 
         super(Gas, self).__init__()
 
-        self.frac_O2 = frac_O2
-        self.frac_He = frac_He
-        self.frac_N2 = 1 - (frac_O2 + frac_He)
+    @staticmethod
+    def _checkValidFrac(value: float):
+        """
+        Check if a value is between 0 and 1.
 
-        self.consumption: float = 0
+        Args:
+            value (float): value to check
+
+        """
+        if value > 1.0 or value < 0:
+            raise ValueError(f"Invalid Gas Fraction {value}")
+
+    def set_mix(
+        self, frac_O2: float = constants.AIR_FO2, frac_He: float = constants.AIR_FHE
+    ):
+        """
+        Set the gas mixture from fraction of O2 and He.
+
+        Args:
+            frac_O2 (float=constants.AIR_FO2):
+            frac_He (float=constants.AIR_FHE):
+
+        """
+        self._checkValidFrac(frac_O2)
+        self._checkValidFrac(frac_He)
+
+        frac_N2: float = 1 - (frac_O2 + frac_He)
+
+        if frac_N2 < 0:
+            raise ValueError("Total Gas fractions exceed 1")
+
+        self._frac_O2 = frac_O2
+        self._frac_He = frac_He
+        self._frac_N2 = frac_N2
+
+    # Properties Getters
+    # To set gas mixes use 'set_mix()' method
+    @property
+    def frac_O2(self) -> float:
+        return self._frac_O2
+
+    @property
+    def frac_N2(self) -> float:
+        return self._frac_N2
+
+    @property
+    def frac_He(self) -> float:
+        return self._frac_He
+
+    def ppO2(self, P_amb: Pressure) -> Pressure:
+        """
+        Gas partial pressure of O2 at a given ambiant pressure
+
+        Args:
+            P_amb (Pressure): Ambiant Pressure
+
+        Returns:
+            Pressure
+
+        """
+        return P_amb * self.frac_O2
+
+    def ppN2(self, P_amb: Pressure) -> Pressure:
+        """
+        Gas partial pressure of Nitrogen at a given ambiant pressure
+
+        Args:
+            P_amb (Pressure): Ambiant Pressure
+
+        Returns:
+            Pressure
+
+        """
+        return P_amb * self.frac_N2
+
+    def ppHe(self, P_amb: Pressure) -> Pressure:
+        """
+        Gas partial pressure of Helium at a given ambiant pressure
+
+        Args:
+            P_amb (Pressure): Ambiant Pressure
+
+        Returns:
+            Pressure
+
+        """
+        return P_amb * self.frac_He
+
+    def equivalentNarcoticPressure(self, P_amb: Pressure) -> Pressure:
+        """
+        Gas equivalent narcotic pressure at a given ambiant pressure, compared to surface (atmospheric) pressure.
+
+        Args:
+            P_amb (Pressure): Ambiant Pressure
+
+        Returns:
+            Pressure
+
+        """
+        return self.ppN2(P_amb) / constants.AIR_FO2
+
+    def maxOperatingPressure(
+        self, max_ppO2: Pressure = constants.DECO_PP02
+    ) -> Pressure:
+        """
+        Maximum operating pressure of gas mixture based on a maximum partial pressure of O2.
+
+        Args:
+            max_ppO2 (Pressure): Maximum partial pressure of O2
+
+        Returns:
+            Pressure
+
+        """
+        return max_ppO2 / self.frac_O2
+
+    def minOperatinPressure(self, min_ppO2: Pressure = constants.MIN_PPO2) -> Pressure:
+        """
+        Minimum operating pressure of gas mixture based on a minimum partial pressure of O2.
+        (Usefull for hypoxic mixes)
+
+        Args:
+            min_ppO2 (Pressure): Minimum partial pressure of O2
+
+        Returns:
+            Pressure
+
+        """
+        return min_ppO2 / self.frac_O2
+
+    def __eq__(self, other: "Gas") -> bool:
+        try:
+            return (self.frac_O2 == other.frac_O2) and (self.frac_He == other.frac_He)
+        except:
+            return False
 
     def __repr__(self):
         if self.frac_He != constants.AIR_FHE:
@@ -26,27 +166,3 @@ class Gas:
 
         else:
             return f"Nx{int(self.frac_O2 * 100)}"
-
-    def ppO2(self, P_amb: Pressure) -> Pressure:
-        return P_amb * self.frac_O2
-
-    def ppN2(self, P_amb: Pressure) -> Pressure:
-        return P_amb * self.frac_N2
-
-    def ppHe(self, P_amb: Pressure) -> Pressure:
-        return P_amb * self.frac_He
-
-    def equivalentNarcoticPressure(self, P_amb: Pressure) -> Pressure:
-        return self.ppN2(P_amb) / constants.AIR_FO2
-
-    def maxOperatingPressure(self, max_ppO2: Pressure = Pressure(1.61362)) -> Pressure:
-        return max_ppO2 / self.frac_O2
-
-    def consume(self, P_amb: Pressure, time: float, sac: float):
-        self.consumption += float(P_amb) * time * sac
-
-    def __eq__(self, other: "Gas") -> bool:
-        try:
-            return (self.frac_O2 == other.frac_O2) and (self.frac_He == other.frac_He)
-        except:
-            return False
