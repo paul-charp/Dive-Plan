@@ -38,7 +38,9 @@ class Dive:
 
         while P_amb > P_surf:
 
-            deco_ceil: Pressure = utils.round_to_stop_P(self.decomodel.getCeiling())
+            deco_ceil: Pressure = (
+                self.decomodel.getCeiling().round_to_deeper_depth_inc()
+            )
 
             switch_P, next_gas = gasplan.getNextGasSwitch(P_amb)
             # print(switch_P.to_depth(), next_gas)

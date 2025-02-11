@@ -47,7 +47,9 @@ class GasPlan:
         if len(best_gases) <= 1:
             return (None, None)
 
-        switch_P: Pressure = round_to_gas_switch_P(best_gases[1].maxOperatingPressure())
+        switch_P: Pressure = (
+            best_gases[1].maxOperatingPressure().round_to_shallower_depth_inc()
+        )
         best_gas = best_gases[1]
 
         return (switch_P, best_gas)

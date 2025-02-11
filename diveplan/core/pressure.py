@@ -1,3 +1,5 @@
+import math
+
 from diveplan.utils import constants
 
 
@@ -56,3 +58,11 @@ class Pressure(float):
 
         P_amb: float = P_atm + ((water_density * constants.G * 10**-5) * depth)
         return Pressure(P_amb)
+
+    def round_to_deeper_depth_inc(self, inc: float = constants.STOP_INC):
+        rounded_depth = math.ceil(self.to_depth() / inc) * inc
+        return Pressure.from_depth(rounded_depth)
+
+    def round_to_shallower_depth_inc(self, inc: float = constants.STOP_INC):
+        rounded_depth = math.floor(self.to_depth() / inc) * inc
+        return Pressure.from_depth(rounded_depth)
