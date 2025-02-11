@@ -4,7 +4,6 @@ from diveplan.core import constants
 
 
 class GasPlan:
-    """docstring for GasPlan."""
 
     def __init__(self, gases):
         super(GasPlan, self).__init__()
@@ -26,19 +25,6 @@ class GasPlan:
         )
 
         return best_gases
-
-    @staticmethod
-    def makeBestMix(
-        P_amb: Pressure, END: float = 30, ppO2: Pressure = Pressure(1.61362)
-    ) -> Gas:
-
-        P_end = Pressure.from_depth(END)
-        ppN2 = P_end * constants.AIR_FN2
-
-        frac_O2 = ppO2 / P_amb
-        frac_He = max(1 - ((ppN2 / P_amb) + frac_O2), 0)
-
-        return Gas(round(frac_O2, 2), round(frac_He, 2))
 
     def getNextGasSwitch(
         self,

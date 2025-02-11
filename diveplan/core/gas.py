@@ -81,7 +81,7 @@ class Gas:
             Pressure
 
         """
-        return P_amb * self.frac_O2
+        return Pressure(P_amb * self.frac_O2)
 
     def ppN2(self, P_amb: Pressure) -> Pressure:
         """
@@ -94,7 +94,7 @@ class Gas:
             Pressure
 
         """
-        return P_amb * self.frac_N2
+        return Pressure(P_amb * self.frac_N2)
 
     def ppHe(self, P_amb: Pressure) -> Pressure:
         """
@@ -107,7 +107,7 @@ class Gas:
             Pressure
 
         """
-        return P_amb * self.frac_He
+        return Pressure(P_amb * self.frac_He)
 
     def equivalentNarcoticPressure(self, P_amb: Pressure) -> Pressure:
         """
@@ -135,7 +135,7 @@ class Gas:
             Pressure
 
         """
-        return max_ppO2 / self.frac_O2
+        return Pressure(max_ppO2 / self.frac_O2)
 
     def minOperatinPressure(self, min_ppO2: Pressure = constants.MIN_PPO2) -> Pressure:
         """
@@ -149,7 +149,32 @@ class Gas:
             Pressure
 
         """
-        return min_ppO2 / self.frac_O2
+        return Pressure(min_ppO2 / self.frac_O2)
+
+    @staticmethod
+    def make_best_mix(
+        P_amb: Pressure, END: float = 30, ppO2: Pressure = Pressure(constants.DECO_PP02)
+    ) -> "Gas":
+        """
+        Make the best Gas mix for a given ambient pressure, equivalent narcotic depth and partial pressure of oxygen.
+
+        Args:
+            P_amb (Pressure): Ambiant Pressure
+            END (float): Equivalent narcotic depth
+            ppO2 (Pressure): ppO2 of wanted Gas at ambiant pressure
+
+        Returns:
+            Gas
+
+        """
+
+        P_end = Pressure.from_depth(END)
+        ppN2 = P_end * constants.AIR_FN2
+
+        frac_O2 = ppO2 / P_amb
+        frac_He = max(1 - ((ppN2 / P_amb) + frac_O2), 0)
+
+        return Gas(round(frac_O2, 1), round(frac_He, 1))
 
     def __eq__(self, other: "Gas") -> bool:
         try:
