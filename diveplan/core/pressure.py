@@ -67,7 +67,7 @@ class Pressure(float):
             Pressure
 
         """
-        return P_atm + ((water_density * constants.G * 10**-5) * depth)
+        return Pressure(P_atm + ((water_density * constants.G * 10**-5) * depth))
 
     def round_to_deeper_depth_inc(self, inc: float = constants.STOP_INC) -> "Pressure":
         """
