@@ -46,6 +46,10 @@ class DiveStep:
 
             self.time = time
 
+    @property
+    def rate(self):
+        return (self.end_depth - self.start_depth) / self.time
+
     def get_P_amb_at_sample(self, s: float) -> float:
 
         depth_at_sample = self.start_depth + (s / self.time) * (
