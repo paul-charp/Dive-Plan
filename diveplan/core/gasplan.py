@@ -8,6 +8,8 @@ class GasPlan:
     def __init__(self, gases):
         super(GasPlan, self).__init__()
 
+        # Remove duplicate gases
+        gases = list(dict.fromkeys(gases))
         self.gases: list[Gas] = gases
 
     def bestGases(self, P_amb: Pressure) -> list[Gas]:
