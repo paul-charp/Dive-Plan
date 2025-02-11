@@ -17,6 +17,8 @@ class Gas:
         self, frac_O2: float = constants.AIR_FO2, frac_He: float = constants.AIR_FHE
     ):
 
+        self.set_mix(frac_O2, frac_He)
+
         super(Gas, self).__init__()
 
     @staticmethod
