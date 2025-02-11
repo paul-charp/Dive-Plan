@@ -13,8 +13,8 @@ class Compartment:
         b_N2: float,
         a_He: float,
         b_He: float,
-        ppN2: float = constants.AIR_FN2,
-        ppHe: float = constants.AIR_FHE,
+        ppN2: Pressure = Pressure(constants.AIR_FN2),
+        ppHe: Pressure = Pressure(constants.AIR_FHE),
         init_P_amb: Pressure = Pressure(constants.P_ATM),
     ):
 
