@@ -2,6 +2,9 @@ import importlib
 import pkgutil
 import inspect
 
+from diveplan.core import dive
+from diveplan.core.divestep import DiveStep
+
 
 def frange(start: float, stop: float, step: float):
     """
@@ -41,3 +44,36 @@ def find_decomodels() -> dict:
                 subclasses[obj.NAME] = obj
 
     return subclasses
+
+
+def simplify_divesteps(divesteps: list[DiveStep]) -> list[DiveStep]:
+
+    new_divesteps: list[DiveStep] = []
+
+    for i, divestep in enumerate(divesteps):
+        try:
+            next_step = divesteps[i + 1]
+
+            if (
+                (next_step.type == divestep.type)
+                and (next_step.start_depth == divestep.end_depth)
+                and (next_step.rate == divestep.rate)
+                and (next_step.gas == divestep.gas)
+            ):
+                new_divesteps.append(
+                    DiveStep(
+                        next_step.time + divestep.time,
+                        divestep.start_depth,
+                        next_step.end_depth,
+                        divestep.gas,
+                    )
+                )
+
+            else:
+                new_divesteps.append(divestep)
+
+        except:
+            new_divesteps.append(divestep)
+            break
+
+    return new_divesteps
