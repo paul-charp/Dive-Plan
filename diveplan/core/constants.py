@@ -33,3 +33,5 @@ SWITCH_AT_STOPS = False
 
 DECO_SAC = 15
 BOT_SAC = 20
+
+MIN_STOP_TIME = 1  # minute

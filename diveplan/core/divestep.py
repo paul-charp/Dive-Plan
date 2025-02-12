@@ -1,11 +1,13 @@
-from multiprocessing import Value
 from diveplan.core import constants
 from diveplan.core.pressure import Pressure
 from diveplan.core.gas import Gas
 
 
 class DiveStep:
-    """docstring for DiveStep."""
+    """
+    Represents part of a dive, with end and start depths, a time and a breathing gas.
+    Depths in meters, time in minutes
+    """
 
     SYMBOL_MAP = {"descent": "▼", "ascent": "▲", "const": "-"}
 
@@ -17,6 +19,7 @@ class DiveStep:
         self.gas: Gas = gas
         self.time = time
 
+    # Getters and Setters
     @property
     def start_depth(self) -> float:
         return self._start_depth
@@ -46,6 +49,7 @@ class DiveStep:
     @time.setter
     def time(self, value: float):
         if value == 0:
+            # If time is set to 0, default ascent and descent rates are used to set the appropriate time regarding the start and end depths
             if self.depth_change < 0:
                 self._time = abs(self.depth_change) / constants.ASC_RATE
 
@@ -53,7 +57,7 @@ class DiveStep:
                 self._time = abs(self.depth_change) / constants.DES_RATE
 
             else:
-                self._time = 1  # Minimum divestep time
+                self._time = constants.MIN_STOP_TIME
 
         elif value > 0:
             self._time = value
@@ -80,22 +84,44 @@ class DiveStep:
         else:
             return "const"
 
-    def get_P_amb_at_sample(self, s: float) -> float:
+    def get_P_amb_at_sample(self, s: float) -> Pressure:
+        """
+        Gets the ambiant pressure for a given timesample of this divestep.
 
+        Arguments:
+            s: float -- The time sample value.
+
+        Returns:
+            Pressure
+        """
         depth_at_sample = self.start_depth + (s / self.time) * (
             self.end_depth - self.start_depth
         )
 
         return Pressure.from_depth(depth_at_sample)
 
-    def extend(self, divestep: "DiveStep") -> "DiveStep":
+    def extend(self, divestep: "DiveStep"):
+        """
+        Extends "merge" this divestep with another.
+
+        Arguments:
+            divestep -- The divestep to merge with
+        """
         self.time += divestep.time
         self.end_depth = divestep.end_depth
 
     def is_continuous(self, divestep: "DiveStep") -> bool:
+        """
+        Returns True is this divestep and another are continuous in depths, rate and gas.
+
+        Arguments:
+            divestep -- Divestep to compare with
+
+        Returns:
+            bool
+        """
         return all(
             [
-                self.type == divestep.type,
                 self.start_depth == divestep.end_depth,
                 self.rate == divestep.rate,
                 self.gas == divestep.gas,
@@ -103,8 +129,8 @@ class DiveStep:
         )
 
     def __repr__(self) -> str:
-
         symbol = self.SYMBOL_MAP[self.type]
+
         start_depth = round(self.start_depth)
         end_depth = round(self.end_depth)
         time = round(self.time)
