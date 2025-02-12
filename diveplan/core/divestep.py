@@ -70,6 +70,10 @@ class DiveStep:
         return round(self.depth_change / self.time, constants.DEPTH_PRECISION)
 
     @property
+    def average_depth(self) -> float:
+        return (self.start_depth + self.end_depth) / 2
+
+    @property
     def depth_change(self) -> float:
         return self.end_depth - self.start_depth
 
