@@ -83,6 +83,7 @@ class Dive:
             self.ascend.append(asc_step)
 
             self.decomodel.integrateDiveStep(asc_step)
+            self.gasplan.consume_gases(asc_step)
             P_amb: Pressure = Pressure.from_depth(asc_step.end_depth)
 
     def calc_steps(self):
@@ -96,6 +97,7 @@ class Dive:
 
         for step in self.steps:
             self.decomodel.integrateDiveStep(step)
+            self.gasplan.consume_gases(step)
 
     def calc_rockbottom():
         pass
@@ -117,3 +119,6 @@ class Dive:
             gas = step.gas
 
             print(f"{symbol} {depth}m {time}min {runtime}min {gas}")
+
+        for gas in self.gasplan.gases:
+            print(f"{gas} : {round(gas.consumption)}L")

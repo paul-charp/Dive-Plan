@@ -1,3 +1,4 @@
+from diveplan.core.divestep import DiveStep
 from diveplan.core.gas import Gas
 from diveplan.core.pressure import Pressure
 from diveplan.core import constants
@@ -56,3 +57,20 @@ class GasPlan:
             P_amb = Pressure.from_depth(P_amb.to_depth() - stop_inc)
 
         return gas_switches
+
+    def consume_gases(self, divestep: DiveStep):
+
+        breathing_gas: Gas = None
+
+        for gas in self.gases:
+            if gas == divestep.gas:
+                breathing_gas = gas
+                break
+
+        if breathing_gas is None:
+            breathing_gas = divestep.gas
+            self.gases.append(breathing_gas)
+
+        depth = divestep.average_depth
+        time = divestep.time
+        breathing_gas.consume(Pressure.from_depth(depth), time)

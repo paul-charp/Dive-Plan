@@ -18,6 +18,7 @@ class Gas:
     ):
 
         self.set_mix(frac_O2, frac_He)
+        self._consumption: float = 0
 
         super(Gas, self).__init__()
 
@@ -69,6 +70,19 @@ class Gas:
     @property
     def frac_He(self) -> float:
         return self._frac_He
+
+    @property
+    def consumption(self) -> float:
+        return self._consumption
+
+    def consume(self, P_amb: Pressure, time: float, sac: float = constants.BOT_SAC):
+        if time < 0:
+            raise ValueError("Time cannot be negative !")
+
+        if sac < 0:
+            raise ValueError("SAC Rate cannot be negative !")
+
+        self._consumption += P_amb * time * sac
 
     def ppO2(self, P_amb: Pressure) -> Pressure:
         """
