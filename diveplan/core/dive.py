@@ -70,7 +70,10 @@ class Dive:
                 time = 1
 
             else:
-                ceil = P_amb - Pressure(0.1)
+                ceil = P_amb - Pressure(
+                    Pressure.from_depth(self.decomodel.samplerate * constants.ASC_RATE)
+                    - Pressure(constants.P_ATM)
+                )
                 ceil = max(P_surf, ceil)
 
             asc_step = DiveStep(
@@ -85,6 +88,8 @@ class Dive:
             self.decomodel.integrateDiveStep(asc_step)
             self.gasplan.consume_gases(asc_step)
             P_amb: Pressure = Pressure.from_depth(asc_step.end_depth)
+
+        self.ascend = simplify_divesteps(self.ascend)
 
     def _calc_steps(self):
 
@@ -109,8 +114,7 @@ class Dive:
     def report(self):
         runtime = 0
 
-        asc_step = simplify_divesteps(self.ascend)
-        self.steps.extend(asc_step)
+        self.steps.extend(self.ascend)
 
         print(self.decomodel)
 
@@ -126,3 +130,19 @@ class Dive:
 
         for gas in self.gasplan.gases:
             print(f"{gas} : {round(gas.consumption)}L")
+
+        print(f"OTU : {self.gasplan.otu}")
+        print(f"CNS : {self.gasplan.cns}%")
+
+
+class DiveReport:
+    def __init__(self, dive: Dive):
+        super(DiveReport, self).__init__()
+
+    @property
+    def tts(self):
+        pass
+
+    @property
+    def total_stop_time(self):
+        pass

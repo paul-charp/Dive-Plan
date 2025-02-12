@@ -17,6 +17,9 @@ class GasPlan:
 
         self.gases: list[Gas] = unique_gases
 
+        self.otu: float = 0
+        self.cns: float = 0
+
     def bestGases(self, P_amb: Pressure) -> list[Gas]:
 
         best_gases: list[Gas] = []
@@ -58,6 +61,10 @@ class GasPlan:
 
         return gas_switches
 
+    @staticmethod
+    def TI(t, pO2, c):
+        return (t**2) * (float(pO2) ** c)
+
     def consume_gases(self, divestep: DiveStep):
 
         breathing_gas: Gas = None
@@ -73,4 +80,10 @@ class GasPlan:
 
         depth = divestep.average_depth
         time = divestep.time
-        breathing_gas.consume(Pressure.from_depth(depth), time)
+
+        P_amb = Pressure.from_depth(depth)
+        breathing_gas.consume(P_amb, time)
+
+        ppO2 = breathing_gas.ppO2(P_amb)
+        self.otu += self.TI((time / 60), ppO2, 4.57)
+        self.cns += self.TI(time, ppO2, 6.8) / 26.108
