@@ -47,6 +47,9 @@ class Dive:
 
             ceil: Pressure = self.decomodel.getCeiling().round_to_deeper_depth_inc()
 
+            if ceil > P_surf:
+                ceil = max(ceil, Pressure.from_depth(constants.LAST_STOP))
+
             time = 0
             if P_amb == ceil:
                 time = 1
