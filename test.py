@@ -1,47 +1,41 @@
-from diveplan.Dive import Dive, DiveStep
-from diveplan.Gas import Gas, GasPlan
-from diveplan.utils import utils
+from diveplan.core.dive import Dive
+from diveplan.core.divestep import DiveStep
+from diveplan.core.gas import Gas
+from diveplan.core.gasplan import GasPlan
+from diveplan.core.pressure import Pressure
 
+"""
+gasplan = GasPlan([Gas(), Gas(0.5), Gas(1.0)])
+
+depths = [40, 12, 28, 5, 3, 7]
+
+print("Avail Gases")
+print(gasplan.gases)
+
+for depth in depths:
+
+    P_amb = Pressure.from_depth(depth)
+    current_gas = gasplan.bestGases(P_amb)[0]
+
+    gas_switches = gasplan.getNextGasSwitch(P_amb, current_gas)
+
+    print(
+        f"At a depth of {depth}m while breating {current_gas}, upcoming gas switches are : "
+    )
+
+    for gas_switch in gas_switches:
+        P, gas = gas_switch
+        print(f"switch at {P.to_depth()}m for {gas}")
+
+"""
 air = Gas()
+nx50 = Gas(0.5)
+gases = [air, nx50]
 
-dive = Dive([
-    DiveStep(23, 40, 40, air)
-    ])
+steps = [DiveStep(20, 40, 40, air)]
 
-dive.GF = (80, 80)
-dive.initDecoModel()
-
+dive = Dive(steps, gases, "Buhlmann ZHL16-C + GF", {"GF": (100, 100)})
 
 dive.calc_steps()
 dive.calc_ascend()
 dive.report()
-
-plan = GasPlan(
-    [
-        Gas(),
-        Gas(1),
-        Gas(0.5),
-        Gas(0.21, 0.3),
-        Gas(0.12, 0.5),
-        Gas(0.5, 0.3)
-    ]
-)
-
-depths = [6, 15, 20, 33, 60, 70, 100, 200]
-
-for depth in depths:
-    P_amb = utils.depth_to_P_amb(depth)
-    
-    
-    print(f'Depth {depth}m')
-    
-    gases = plan.bestGases(P_amb)
-    
-    print(gases)
-    
-    
-for depth in depths:
-    print(f'Depth {depth}m')
-    P_amb = utils.depth_to_P_amb(depth)
-    gas = plan.makeBestMix(P_amb)
-    print(gas)
