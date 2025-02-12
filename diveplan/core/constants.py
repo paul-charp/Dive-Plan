@@ -35,3 +35,5 @@ DECO_SAC = 15
 BOT_SAC = 20
 
 MIN_STOP_TIME = 1  # minute
+
+DEFAULT_DECO_MODEL = "Buhlmann ZHL16-C + GF"

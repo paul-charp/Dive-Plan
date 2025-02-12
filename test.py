@@ -34,7 +34,7 @@ gases = [air, nx50]
 
 steps = [DiveStep(20, 40, 40, air)]
 
-dive = Dive(steps, gases, "Buhlmann ZHL16-C + GF", {"GF": (100, 100)})
+dive = Dive(steps, gases)
 
 dive.plan()
 dive.report()

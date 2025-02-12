@@ -14,7 +14,7 @@ class Dive:
         self,
         planned_steps: list[DiveStep],
         gases: list[Gas],
-        decomodel_name: str,
+        decomodel_name: str = constants.DEFAULT_DECO_MODEL,
         decomodel_parms: dict = {},
         decomodel_samplerate: float = constants.SAMPLE_RATE,
     ):
