@@ -67,7 +67,7 @@ class DiveStep:
 
     @property
     def rate(self) -> float:
-        return self.depth_change / self.time
+        return round(self.depth_change / self.time, constants.DEPTH_PRECISION)
 
     @property
     def depth_change(self) -> float:
