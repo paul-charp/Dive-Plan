@@ -5,7 +5,7 @@ from diveplan.core import constants
 
 class GasPlan:
 
-    def __init__(self, gases):
+    def __init__(self, gases: list[Gas]):
         super(GasPlan, self).__init__()
 
         # Remove duplicate gases
