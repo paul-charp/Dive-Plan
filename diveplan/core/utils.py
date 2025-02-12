@@ -46,35 +46,28 @@ def find_decomodels() -> dict:
     return subclasses
 
 
+def checkDivestepEq(a, b):
+    return (
+        (a.type == b.type)
+        and (a.start_depth == b.end_depth)
+        and (a.rate == b.rate)
+        and (a.gas == b.gas)
+    )
+
+
 def simplify_divesteps(divesteps: list[DiveStep]) -> list[DiveStep]:
 
-    new_divesteps: list[DiveStep] = []
+    new_divesteps: list[DiveStep] = [divesteps[0]]
 
-    for i, divestep in enumerate(divesteps):
-        try:
-            next_step = divesteps[i + 1]
+    for i in range(1, len(divesteps)):
 
-            if (
-                (next_step.type == divestep.type)
-                and (next_step.start_depth == divestep.end_depth)
-                and (next_step.rate == divestep.rate)
-                and (next_step.gas == divestep.gas)
-            ):
-                new_divesteps.append(
-                    DiveStep(
-                        next_step.time + divestep.time,
-                        divestep.start_depth,
-                        next_step.end_depth,
-                        divestep.gas,
-                    )
-                )
+        divestep = divesteps[i]
 
-            else:
-                new_divesteps.append(divestep)
+        if divestep.is_continuous(new_divesteps[-1]):
+            new_divesteps[-1].extend(divestep)
 
-        except:
+        else:
             new_divesteps.append(divestep)
-            break
 
     return new_divesteps
 
