@@ -23,9 +23,11 @@ class Dive:
         self.steps: list[DiveStep] = []
         for step in planned_steps:
             self.steps.append(step)
+            gases.append(step.gas)
 
         self.ascend: list[DiveStep] = []
-        self.gases: list[Gas] = gases
+
+        self.gasplan: GasPlan = GasPlan(gases)
 
         DecoModel = find_decomodels().get(decomodel_name)
 
@@ -42,17 +44,34 @@ class Dive:
         P_amb: Pressure = Pressure.from_depth(bottom_depth)
         P_surf: Pressure = Pressure.from_depth(0)
         gas: Gas = self.steps[-1].gas
+        P_switch, next_gas = None, None
 
         while P_amb > P_surf:
 
             ceil: Pressure = self.decomodel.getCeiling().round_to_deeper_depth_inc()
 
+            try:
+                P_switch, next_gas = self.gasplan.getNextGasSwitch(P_amb, gas)[0]
+
+            except IndexError:
+                P_switch, next_gas = None, None
+
             if ceil > P_surf:
                 ceil = max(ceil, Pressure.from_depth(constants.LAST_STOP))
 
+            if P_switch is not None:
+                ceil = max(ceil, P_switch)
+
             time = 0
             if P_amb == ceil:
+                if (next_gas is not None) and (next_gas != gas):
+                    gas = next_gas
+
                 time = 1
+
+            else:
+                ceil = P_amb - Pressure(0.1)
+                ceil = max(P_surf, ceil)
 
             asc_step = DiveStep(
                 time,
