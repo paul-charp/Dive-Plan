@@ -1,3 +1,4 @@
+from multiprocessing import Value
 from diveplan.core import constants
 from diveplan.core.pressure import Pressure
 from diveplan.core.gas import Gas
@@ -14,19 +15,51 @@ class DiveStep:
         self.start_depth = start_depth
         self.end_depth = end_depth
         self.gas: Gas = gas
+        self.time = time
 
-        if time == 0:
+    @property
+    def start_depth(self) -> float:
+        return self._start_depth
+
+    @start_depth.setter
+    def start_depth(self, value: float):
+        if value >= 0:
+            self._start_depth = value
+        else:
+            raise ValueError("Depth cannot be a negative value !")
+
+    @property
+    def end_depth(self) -> float:
+        return self._end_depth
+
+    @end_depth.setter
+    def end_depth(self, value: float):
+        if value >= 0:
+            self._end_depth = value
+        else:
+            raise ValueError("Depth cannot be a negative value !")
+
+    @property
+    def time(self) -> float:
+        return self._time
+
+    @time.setter
+    def time(self, value: float):
+        if value == 0:
             if self.depth_change < 0:
-                self.time = abs(self.depth_change) / constants.ASC_RATE
+                self._time = abs(self.depth_change) / constants.ASC_RATE
 
             elif self.depth_change > 0:
-                self.time = abs(self.depth_change) / constants.DES_RATE
+                self._time = abs(self.depth_change) / constants.DES_RATE
 
             else:
-                self.time = 1  # Minimum divestep time
+                self._time = 1  # Minimum divestep time
+
+        elif value > 0:
+            self._time = value
 
         else:
-            self.time = time
+            raise ValueError("Time cannot be a negative value !")
 
     @property
     def rate(self) -> float:
