@@ -36,6 +36,5 @@ steps = [DiveStep(20, 40, 40, air)]
 
 dive = Dive(steps, gases, "Buhlmann ZHL16-C + GF", {"GF": (100, 100)})
 
-dive.calc_steps()
-dive.calc_ascend()
+dive.plan()
 dive.report()

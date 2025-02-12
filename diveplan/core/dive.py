@@ -39,7 +39,7 @@ class Dive:
         else:
             raise ValueError(f"DecoModel '{decomodel_name}' not found !")
 
-    def calc_ascend(self):
+    def _calc_ascend(self):
         bottom_depth = self.steps[-1].end_depth
         P_amb: Pressure = Pressure.from_depth(bottom_depth)
         P_surf: Pressure = Pressure.from_depth(0)
@@ -86,7 +86,7 @@ class Dive:
             self.gasplan.consume_gases(asc_step)
             P_amb: Pressure = Pressure.from_depth(asc_step.end_depth)
 
-    def calc_steps(self):
+    def _calc_steps(self):
 
         first_step = self.steps[0]
 
@@ -101,6 +101,10 @@ class Dive:
 
     def calc_rockbottom():
         pass
+
+    def plan(self):
+        self._calc_steps()
+        self._calc_ascend()
 
     def report(self):
         runtime = 0
