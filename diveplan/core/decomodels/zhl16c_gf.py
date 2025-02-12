@@ -157,7 +157,7 @@ class ZHL16C_GF(AbstractDecoModel):
         self.P_deep: Pressure = Pressure(constants.P_ATM)
 
     def _initCompartments(self):
-        self.compartments = []
+        self.compartments: list[Compartment] = []
 
         for compConsts in self._MODEL_CONSTANTS:
             compartment = Compartment(
