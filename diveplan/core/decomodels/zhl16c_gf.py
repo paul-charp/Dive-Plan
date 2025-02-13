@@ -174,7 +174,7 @@ class ZHL16C_GF(AbstractDecoModel):
     # Model Physics Functions
     @staticmethod
     def __calcInertGasPressure(
-        P_init: Pressure, P_gas: Pressure, dtime, htime
+        P_init: Pressure, P_gas: Pressure, dtime: float, htime: float
     ) -> Pressure:
         return P_init + (P_gas - P_init) * (1 - 2 ** (-dtime / htime))
 
