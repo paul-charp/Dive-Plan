@@ -39,6 +39,15 @@ class Dive:
         else:
             raise ValueError(f"DecoModel '{decomodel_name}' not found !")
 
+    def init_from_previous_dive(self, previous_dive: "Dive", surface_interval: float):
+        if type(self.decomodel == previous_dive.decomodel):
+
+            deco_var_name = self.decomodel.DECO_MODEL_VAR
+            self.decomodel.__setattr__(
+                deco_var_name, previous_dive.decomodel.__getattribute__(deco_var_name)
+            )
+            self.decomodel.integrateDiveStep(DiveStep(surface_interval, 0, 0, Gas()))
+
     def _calc_ascend(self):
         bottom_depth = self.steps[-1].end_depth
         P_amb: Pressure = Pressure.from_depth(bottom_depth)
@@ -47,8 +56,13 @@ class Dive:
         P_switch, next_gas = None, None
 
         while P_amb > P_surf:
-
-            ceil: Pressure = self.decomodel.getCeiling().round_to_deeper_depth_inc()
+            ceil: Pressure = self.decomodel.getCeiling()
+            print(
+                P_amb.to_depth(),
+                ceil.to_depth(),
+                ceil.round_to_deeper_depth_inc().to_depth(),
+            )
+            ceil = ceil.round_to_deeper_depth_inc()
 
             try:
                 P_switch, next_gas = self.gasplan.getNextGasSwitch(P_amb, gas)[0]
@@ -86,8 +100,9 @@ class Dive:
             self.ascend.append(asc_step)
 
             self.decomodel.integrateDiveStep(asc_step)
+
             self.gasplan.consume_gases(asc_step)
-            P_amb: Pressure = Pressure.from_depth(asc_step.end_depth)
+            P_amb = Pressure.from_depth(asc_step.end_depth)
 
         self.ascend = simplify_divesteps(self.ascend)
 
@@ -122,11 +137,15 @@ class Dive:
 
             symbol = step.SYMBOL_MAP[step.type]
             depth = round(step.end_depth)
-            time = round(step.time)
+
+            time = step.time  # round(step.time)
+            time_m = int(time)
+            time_s = int((time - time_m) * 60)
+
             runtime += round(time)
             gas = step.gas
 
-            print(f"{symbol} {depth}m {time}min {runtime}min {gas}")
+            print(f"{symbol} {depth}m {time_m}'{time_s}'' {runtime}min {gas}")
 
         for gas in self.gasplan.gases:
             print(f"{gas} : {round(gas.consumption)}L")

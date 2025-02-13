@@ -149,7 +149,7 @@ class ZHL16C_GF(AbstractDecoModel):
 
     _DEFAULT_GF: tuple[int] = (80, 80)
     NAME: str = "Buhlmann ZHL16-C + GF"
-    DECO_MODEL_VAR: str = "compartment"
+    DECO_MODEL_VAR: str = "compartments"
 
     def __init__(self, samplerate: float, parms: dict):
         super(ZHL16C_GF, self).__init__(samplerate)

@@ -30,11 +30,23 @@ for depth in depths:
 
 air = Gas()
 nx50 = Gas(0.5)
-gases = [air, nx50]
+gases = [air]
 
 steps = [DiveStep(20, 40, 40, air)]
 
-dive = Dive(steps, gases)
+dive = Dive(steps, gases, decomodel_parms={"GF": (80, 80)}, decomodel_samplerate=0.1)
 
 dive.plan()
 dive.report()
+
+dive_2 = Dive([DiveStep(40, 20, 20, air)], gases)
+
+dive_2.init_from_previous_dive(dive, 240)
+
+dive_2.plan()
+dive_2.report()
+dive_2.plan()
+dive_2.plan()
+dive_2.plan()
+dive_2.plan()
+dive_2.report()
