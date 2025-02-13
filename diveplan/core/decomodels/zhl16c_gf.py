@@ -16,7 +16,7 @@ class ZHL16C_GF(AbstractDecoModel):
         - 'GF': tuple(int, int): Gradient Factor (ex : (80, 80) which is the default value)
     """
 
-    _MODEL_CONSTANTS = [
+    _MODEL_CONSTANTS: list[dict] = [
         {
             "h_N2": 5.0,
             "a_N2": 1.1696,
@@ -147,8 +147,9 @@ class ZHL16C_GF(AbstractDecoModel):
         },
     ]
 
-    NAME = "Buhlmann ZHL16-C + GF"
-    _DEFAULT_GF = (80, 80)
+    _DEFAULT_GF: tuple[int] = (80, 80)
+    NAME: str = "Buhlmann ZHL16-C + GF"
+    DECO_MODEL_VAR: str = "compartment"
 
     def __init__(self, samplerate: float, parms: dict):
         super(ZHL16C_GF, self).__init__(samplerate)

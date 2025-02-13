@@ -1,4 +1,5 @@
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod, abstractproperty
+from typing import Any
 
 from diveplan.core.divestep import DiveStep
 from diveplan.core import utils
@@ -7,7 +8,8 @@ from diveplan.core.pressure import Pressure
 
 class AbstractDecoModel(ABC):
 
-    NAME = ""
+    NAME: str = ""
+    DECO_MODEL_VAR: str = ""
 
     def __init__(self, samplerate: float, parms: dict = {}):
         super(AbstractDecoModel, self).__init__()
