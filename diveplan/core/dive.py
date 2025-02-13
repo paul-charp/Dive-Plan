@@ -56,13 +56,7 @@ class Dive:
         P_switch, next_gas = None, None
 
         while P_amb > P_surf:
-            ceil: Pressure = self.decomodel.getCeiling()
-            print(
-                P_amb.to_depth(),
-                ceil.to_depth(),
-                ceil.round_to_deeper_depth_inc().to_depth(),
-            )
-            ceil = ceil.round_to_deeper_depth_inc()
+            ceil: Pressure = self.decomodel.getCeiling().round_to_deeper_depth_inc()
 
             try:
                 P_switch, next_gas = self.gasplan.getNextGasSwitch(P_amb, gas)[0]
@@ -78,7 +72,7 @@ class Dive:
 
             time = 0
             if P_amb == ceil:
-                if (next_gas is not None) and (next_gas != gas):
+                if all[(next_gas is not None), (next_gas != gas), (P_switch >= ceil)]:
                     gas = next_gas
 
                 time = 1

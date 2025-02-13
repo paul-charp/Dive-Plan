@@ -46,15 +46,6 @@ def find_decomodels() -> dict:
     return subclasses
 
 
-def checkDivestepEq(a, b):
-    return (
-        (a.type == b.type)
-        and (a.start_depth == b.end_depth)
-        and (a.rate == b.rate)
-        and (a.gas == b.gas)
-    )
-
-
 def simplify_divesteps(divesteps: list[DiveStep]) -> list[DiveStep]:
 
     new_divesteps: list[DiveStep] = [divesteps[0]]
