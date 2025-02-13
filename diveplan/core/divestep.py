@@ -135,9 +135,9 @@ class DiveStep:
     def __repr__(self) -> str:
         symbol = self.SYMBOL_MAP[self.type]
 
-        start_depth = round(self.start_depth)
-        end_depth = round(self.end_depth)
-        time = round(self.time)
+        start_depth = round(self.start_depth, 2)
+        end_depth = round(self.end_depth, 2)
+        time = round(self.time / 60)
         gas = self.gas
 
-        return f"{start_depth}m {symbol} {end_depth}m {time}min {gas}"
+        return f"{start_depth}m {symbol} {end_depth}m {time}s {gas}"
