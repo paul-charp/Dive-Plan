@@ -8,6 +8,13 @@ from diveplan.core.pressure import Pressure
 
 
 class ZHL16C_GF(AbstractDecoModel):
+    """
+    Implementation of Buhlmann ZHL16C algorithm with Gradient Factors.
+
+    Required modules : Compartment, Gradient
+    Decomodel Parms :
+        - 'GF': tuple(int, int): Gradient Factor (ex : (80, 80) which is the default value)
+    """
 
     _MODEL_CONSTANTS = [
         {
