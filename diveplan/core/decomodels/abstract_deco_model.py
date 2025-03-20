@@ -1,8 +1,7 @@
-from abc import ABC, abstractmethod, abstractproperty
-from typing import Any
+from abc import ABC, abstractmethod
 
-from diveplan.core.divestep import DiveStep
 from diveplan.core import utils
+from diveplan.core.divestep import DiveStep
 from diveplan.core.pressure import Pressure
 
 
