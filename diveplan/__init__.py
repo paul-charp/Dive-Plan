@@ -1,3 +1,4 @@
+# type: ignore
 # Exposing top level classes.
 from diveplan.core.dive import Dive
 from diveplan.core.divestep import DiveStep
