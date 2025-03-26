@@ -1,0 +1,31 @@
+{
+    "surface_air_composition": {
+        "air_fo2": 0.21,
+        "air_fn2": 0.79,
+        "air_fhe": 0
+    },
+    "physics": {
+        "g": 9.81,
+        "water_density": 1020,
+        "p_atm": 1.01325
+    },
+    "algorithms_precisions": {
+        "p_precision": 5,
+        "depth_precision": 2
+    },
+    "dive_planning_default_values": {
+        "asc_rate": 10,
+        "des_rate": 20,
+        "min_ppo2": 0.18,
+        "deco_ppo2": 1.61362,
+        "bot_ppo2": 1.4,
+        "stop_inc": 3,
+        "last_stop": 6,
+        "switch_at_stops": false,
+        "deco_sac": 15,
+        "bot_sac": 20,
+        "min_stop_time": 1,
+        "default_deco_model": "Buhlmann ZHL16-C + GF",
+        "sample_rate": 0.1
+    }
+}
