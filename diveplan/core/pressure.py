@@ -1,4 +1,5 @@
 import math
+from typing import Optional, Union
 
 from diveplan.core import constants
 
@@ -16,8 +17,9 @@ class Pressure(float):
     """
 
     _PRECISION = 5
+    VALID_TYPES = Union[float, int, "Pressure"]
 
-    def __new__(cls, value: float):
+    def __new__(cls, value: VALID_TYPES):
 
         # cls._validate_value(value) # Disable check for negative value causing error in deco calculations
 
@@ -26,14 +28,12 @@ class Pressure(float):
         return super().__new__(cls, value)
 
     @staticmethod
-    def _validate_value(value: float):
+    def _validate_value(value: float) -> None:
         if value < 0:
             raise ValueError("Pressure cannot be negative")
 
     def to_depth(
-        self,
-        P_atm: "Pressure" = constants.P_ATM,
-        water_density: float = constants.WATER_DENSITY,
+        self, P_atm: Optional["Pressure"] = None, water_density: Optional[float] = None
     ) -> float:
         """
         Converts pressure value to depth in meters
@@ -46,14 +46,21 @@ class Pressure(float):
             float
 
         """
+        if P_atm is None:
+            P_atm = Pressure(constants.P_ATM)
+
+        if water_density is None:
+            water_density = constants.WATER_DENSITY
+
         depth: float = (self - P_atm) / (water_density * constants.G * 10**-5)
+
         return round(depth, constants.DEPTH_PRECISION)
 
     @staticmethod
     def from_depth(
         depth: float,
-        P_atm: "Pressure" = constants.P_ATM,
-        water_density: float = constants.WATER_DENSITY,
+        P_atm: Optional["Pressure"] = None,
+        water_density: Optional[float] = None,
     ) -> "Pressure":
         """
         Pressure from depth value in meters
@@ -67,9 +74,16 @@ class Pressure(float):
             Pressure
 
         """
+
+        if P_atm is None:
+            P_atm = Pressure(constants.P_ATM)
+
+        if water_density is None:
+            water_density = constants.WATER_DENSITY
+
         return Pressure(P_atm + ((water_density * constants.G * 10**-5) * depth))
 
-    def round_to_deeper_depth_inc(self, inc: float = constants.STOP_INC) -> "Pressure":
+    def round_to_deeper_depth_inc(self, inc: Optional[float] = None) -> "Pressure":
         """
         Rounds the Pressure value to the next deeper increments of depth in meters
 
@@ -80,6 +94,9 @@ class Pressure(float):
             Pressure
 
         """
+        if inc is None:
+            inc = constants.STOP_INC
+
         rounded_depth = math.ceil(self.to_depth() / inc) * inc
         return Pressure.from_depth(rounded_depth)
 
@@ -100,18 +117,18 @@ class Pressure(float):
         return Pressure.from_depth(rounded_depth)
 
     # Basic math implementation.
-    def __add__(self, other) -> "Pressure":
+    def __add__(self, other: VALID_TYPES) -> "Pressure":
         return Pressure(float(self) + float(other))
 
-    def __sub__(self, other) -> "Pressure":
+    def __sub__(self, other: VALID_TYPES) -> "Pressure":
         result = float(self) - float(other)
         return Pressure(result)
 
-    def __mul__(self, other) -> "Pressure":
+    def __mul__(self, other: VALID_TYPES) -> "Pressure":
         return Pressure(float(self) * float(other))
 
-    def __truediv__(self, other) -> "Pressure":
+    def __truediv__(self, other: VALID_TYPES) -> "Pressure":
         return Pressure(float(self) / float(other))
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{float(self)} bar"
