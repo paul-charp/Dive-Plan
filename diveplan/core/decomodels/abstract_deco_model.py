@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Any
 
 from diveplan.core import utils
 from diveplan.core.divestep import DiveStep
@@ -10,18 +11,17 @@ class AbstractDecoModel(ABC):
     NAME: str = ""
     DECO_MODEL_VAR: str = ""
 
-    def __init__(self, samplerate: float, parms: dict = {}):
+    def __init__(self, samplerate: float, **kwargs: Any) -> None:
         super(AbstractDecoModel, self).__init__()
 
         self.samplerate = samplerate
-        self.parms = parms
 
     @property
-    def samplerate(self):
+    def samplerate(self) -> float:
         return self._samplerate
 
     @samplerate.setter
-    def samplerate(self, value):
+    def samplerate(self, value: float) -> None:
         try:
             value = float(value)
         except:
@@ -30,14 +30,14 @@ class AbstractDecoModel(ABC):
         if value <= 0:
             raise ValueError("samplerate should be > 0 !")
 
-        self._samplerate = value
+        self._samplerate: float = value
 
-    def integrateDiveStep(self, divestep: DiveStep):
+    def integrateDiveStep(self, divestep: DiveStep) -> None:
         for s in utils.frange(0, divestep.time, self.samplerate):
             self._integrateModel(divestep, s)
 
     @abstractmethod
-    def _integrateModel(self):
+    def _integrateModel(self, divestep: DiveStep, s: float) -> None:
         raise NotImplementedError()
 
     @abstractmethod
