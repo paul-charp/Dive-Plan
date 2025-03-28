@@ -1,6 +1,8 @@
+from typing import Optional
+
 from diveplan.core import constants
-from diveplan.core.pressure import Pressure
 from diveplan.core.gas import Gas
+from diveplan.core.pressure import Pressure
 
 
 class DiveStep:
@@ -11,12 +13,26 @@ class DiveStep:
 
     SYMBOL_MAP = {"descent": "▼", "ascent": "▲", "const": "-"}
 
-    def __init__(self, time, start_depth, end_depth, gas):
+    def __init__(
+        self,
+        time: float,
+        start_depth: float,
+        end_depth: float,
+        gas: Optional[Gas | str],
+    ):
         super(DiveStep, self).__init__()
 
         self.start_depth = start_depth
         self.end_depth = end_depth
-        self.gas: Gas = gas
+
+        if gas is None:
+            self.gas = Gas()
+
+        elif isinstance(gas, str):
+            self.gas = Gas.from_name(gas)
+
+        else:
+            self.gas = gas
         self.time = time
 
     # Getters and Setters
@@ -90,7 +106,7 @@ class DiveStep:
 
     def get_P_amb_at_sample(self, s: float) -> Pressure:
         """
-        Gets the ambiant pressure for a given timesample of this divestep.
+        Gets the ambient pressure for a given time sample of this divestep.
 
         Arguments:
             s: float -- The time sample value.
