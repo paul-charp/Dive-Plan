@@ -30,6 +30,28 @@ class Gas:
 
         super(Gas, self).__init__()
 
+    @classmethod
+    def from_name(cls, gas_name: str) -> "Gas":
+
+        gas_name = gas_name.lower()
+
+        if gas_name == "air":
+            frac_O2 = constants.AIR_FO2
+            frac_He = constants.AIR_FHE
+
+        elif gas_name.startswith("nx"):
+            frac_O2 = float(gas_name[2:]) / 100.0
+            frac_He = 0.0
+
+        elif gas_name.startswith("tx"):
+            frac_O2 = float(gas_name[2:3]) / 100.0
+            frac_He = float(gas_name[4:5]) / 100.0
+
+        else:
+            raise ValueError("Not a correct gas name")
+
+        return cls(frac_O2, frac_He)
+
     @staticmethod
     def _checkValidFrac(value: float) -> None:
         """
@@ -185,6 +207,16 @@ class Gas:
 
         """
         return Pressure(min_ppO2 / self.frac_O2)
+
+    def is_breathable(self, P_amb: Pressure, enforce_max_ppN2: bool = True) -> bool:
+        """
+        Check if the gas is breathable at a given ambient pressure.
+        """
+        if enforce_max_ppN2:
+            if self.ppN2(P_amb) > Pressure(constants.MAX_PPN2):
+                return False
+
+        return self.minOperatingPressure() <= P_amb <= self.maxOperatingPressure()
 
     @staticmethod
     def make_best_mix(
