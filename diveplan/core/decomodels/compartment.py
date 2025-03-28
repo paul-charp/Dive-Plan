@@ -34,5 +34,5 @@ class Compartment:
         self.ppN2: Pressure = ppN2 * init_P_amb
         self.ppHe: Pressure = ppHe * init_P_amb
 
-        # Tolerated Intert Gas Pressure
-        self.P_tol: Pressure = None
+        # Tolerated Inert Gas Pressure
+        self.P_tol = Pressure(-1)

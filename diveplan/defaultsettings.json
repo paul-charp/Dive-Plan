@@ -9,11 +9,11 @@
         "water_density": 1020,
         "p_atm": 1.01325
     },
-    "algorithms_precisions": {
+    "decimal_precisions": {
         "p_precision": 5,
         "depth_precision": 2
     },
-    "dive_planning_default_values": {
+    "dive_planning": {
         "asc_rate": 10,
         "des_rate": 20,
         "min_ppo2": 0.18,
