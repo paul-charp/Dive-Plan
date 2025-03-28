@@ -16,7 +16,7 @@ class Pressure(float):
 
     """
 
-    _PRECISION = 5
+    _PRECISION = constants.P_PRECISION
     VALID_TYPES = Union[float, int, "Pressure"]
 
     def __new__(cls, value: VALID_TYPES):
