@@ -1,7 +1,9 @@
+from typing import Optional
+
+from diveplan.core import constants
 from diveplan.core.divestep import DiveStep
 from diveplan.core.gas import Gas
 from diveplan.core.pressure import Pressure
-from diveplan.core import constants
 
 
 class GasPlan:
@@ -10,7 +12,7 @@ class GasPlan:
         super(GasPlan, self).__init__()
 
         # Remove duplicate gases
-        unique_gases = []
+        unique_gases: list[Gas] = []
         for gas in gases:
             if gas not in unique_gases:
                 unique_gases.append(gas)
@@ -40,11 +42,17 @@ class GasPlan:
         self,
         P_amb: Pressure,
         current_gas: Gas,
-        P_surf: Pressure = constants.P_ATM,
-        stop_inc: float = constants.STOP_INC,
+        P_surf: Optional[Pressure] = None,
+        stop_inc: Optional[Pressure] = None,
     ) -> list[tuple[Pressure, Gas]]:
 
-        best_gas: Gas = None
+        if P_surf is None:
+            P_surf = Pressure(constants.P_ATM)
+
+        if stop_inc is None:
+            stop_inc = Pressure(constants.STOP_INC)
+
+        best_gas: Optional[Gas] = None
 
         gas_switches: list[tuple[Pressure, Gas]] = []
 
@@ -62,12 +70,26 @@ class GasPlan:
         return gas_switches
 
     @staticmethod
-    def TI(t, pO2, c):
+    def TI(t: float, pO2: float, c: float):
         return (t**2) * (float(pO2) ** c)
 
     def consume_gases(self, divestep: DiveStep):
 
-        breathing_gas: Gas = None
+        try:
+            breathing_gas: Gas = next(
+                (gas for gas in self.gases if divestep.gas == gas)
+            )
+
+        except StopIteration:
+            self.gases.append(breathing_gas)
+            breathing_gas: Gas = divestep.gas
+
+        if breathing_gas in self.gases:
+            # Get the gas
+            pass
+
+        else:
+            self.gases.append(breathing_gas)
 
         for gas in self.gases:
             if gas == divestep.gas:
