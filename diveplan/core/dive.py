@@ -59,7 +59,7 @@ class Dive:
             ceil: Pressure = self.decomodel.getCeiling().round_to_deeper_depth_inc()
 
             try:
-                P_switch, next_gas = self.gasplan.getNextGasSwitch(P_amb, gas)[0]
+                P_switch, next_gas = self.gasplan.get_next_gas_switches(P_amb, gas)[0]
 
             except IndexError:
                 P_switch, next_gas = None, None
