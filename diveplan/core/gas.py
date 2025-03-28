@@ -1,7 +1,10 @@
+import re
 from typing import Optional
 
 from diveplan.core import constants
 from diveplan.core.pressure import Pressure
+
+GAS_REGEX: str = r"^(nx|tx)(\d{1,2})(?:/(\d{1,2}))?$"
 
 
 class Gas:
@@ -36,16 +39,24 @@ class Gas:
         gas_name = gas_name.lower()
 
         if gas_name == "air":
-            frac_O2 = constants.AIR_FO2
-            frac_He = constants.AIR_FHE
+            return cls()
 
-        elif gas_name.startswith("nx"):
-            frac_O2 = float(gas_name[2:]) / 100.0
-            frac_He = 0.0
+        match = re.match(GAS_REGEX, gas_name)
 
-        elif gas_name.startswith("tx"):
-            frac_O2 = float(gas_name[2:3]) / 100.0
-            frac_He = float(gas_name[4:5]) / 100.0
+        if not match:
+            raise ValueError("Not a correct gas name")
+
+        if match.group(1) == "nx":
+            frac_O2: float = float(match.group(2)) / 100
+            frac_He: float = 0.0
+
+        elif match.group(1) == "tx":
+            frac_O2: float = float(match.group(2)) / 100
+
+            if match.group(3) is None:
+                raise ValueError("Trimix gas must have He fraction")
+
+            frac_He: float = float(match.group(3)) / 100
 
         else:
             raise ValueError("Not a correct gas name")
@@ -101,6 +112,9 @@ class Gas:
 
     @property
     def consumption(self) -> float:
+        """
+        The gas consumption in liters.
+        """
         return self._consumption
 
     @property
@@ -116,7 +130,12 @@ class Gas:
         else:
             return f"Nx{int(self.frac_O2 * 100)}"
 
-    def consume(self, P_amb: Pressure, time: float, sac: float = constants.BOT_SAC):
+    def consume(
+        self, P_amb: Pressure, time: float, sac: float = constants.BOT_SAC
+    ) -> None:
+        """
+        Consume gas at a given ambient pressure, time and SAC rate.
+        """
         if time < 0:
             raise ValueError("Time cannot be negative !")
 
