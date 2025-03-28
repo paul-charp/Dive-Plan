@@ -1,8 +1,7 @@
 import importlib
-import pkgutil
 import inspect
+import pkgutil
 
-from diveplan.core import dive
 from diveplan.core.divestep import DiveStep
 
 
