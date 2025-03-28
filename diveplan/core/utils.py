@@ -4,6 +4,9 @@ import pkgutil
 
 from diveplan.core.divestep import DiveStep
 
+BAR_PSI_FACTOR = 14.5038
+METERS_FEET_FACTOR = 3.28084
+
 
 def frange(start: float, stop: float, step: float):
     """
@@ -15,7 +18,7 @@ def frange(start: float, stop: float, step: float):
         start += step
 
 
-def find_decomodels() -> dict:
+def find_decomodels() -> dict[str, type]:
     """
     Finds all available DecoModels
 
@@ -33,12 +36,12 @@ def find_decomodels() -> dict:
 
     package = importlib.import_module(package_name)
 
-    subclasses = {}
+    subclasses: dict[str, type] = {}
 
     for _, module_name, _ in pkgutil.iter_modules(package.__path__, package_name + "."):
         module = importlib.import_module(module_name)
 
-        for name, obj in inspect.getmembers(module, inspect.isclass):
+        for _, obj in inspect.getmembers(module, inspect.isclass):
             if issubclass(obj, base_class) and obj is not base_class:
                 subclasses[obj.NAME] = obj
 
@@ -63,16 +66,16 @@ def simplify_divesteps(divesteps: list[DiveStep]) -> list[DiveStep]:
 
 
 def meters_to_feet(value: float) -> float:
-    return value * 3.28084
+    return value * METERS_FEET_FACTOR
 
 
 def feet_to_meters(value: float) -> float:
-    return value / 3.28084
+    return value / METERS_FEET_FACTOR
 
 
 def bar_to_psi(value: float) -> float:
-    return value * 14.5038
+    return value * BAR_PSI_FACTOR
 
 
 def psi_to_bar(value: float) -> float:
-    return value / 14.5038
+    return value / BAR_PSI_FACTOR
