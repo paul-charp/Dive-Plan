@@ -9,7 +9,7 @@ GAS_REGEX: str = r"^(nx|tx)(\d{1,2})(?:/(\d{1,2}))?$"
 
 class Gas:
     """
-    Gas Mixture Defined by fixed fraction of Oxygen, Nitrogen and Helium.
+    Gas Mixture Defined by fixed fraction of Oxygen, and Helium.
     Nitrogen makes up the rest of the gas.
 
     Args:
@@ -35,11 +35,21 @@ class Gas:
 
     @classmethod
     def from_name(cls, gas_name: str) -> "Gas":
+        """
+        Create a Gas object from a gas name.
+        Gas name can be either Nx or Tx format.
+        Nx format is NxXX where XX is the fraction of O2 in percent.
+        Tx format is TxXX/YY where XX is the fraction of O2 in percent and YY is the fraction of He in percent.
+        Other accepted values are Air and Oxygen.
+        """
 
         gas_name = gas_name.lower()
 
         if gas_name == "air":
             return cls()
+
+        if gas_name == "oxygen":
+            return cls(1.0, 0.0)
 
         match = re.match(GAS_REGEX, gas_name)
 
@@ -126,6 +136,9 @@ class Gas:
             self.frac_O2 == constants.AIR_FO2
         ):
             return "Air"
+
+        elif self.frac_O2 == 1.0:
+            return "Oxygen"
 
         else:
             return f"Nx{int(self.frac_O2 * 100)}"
