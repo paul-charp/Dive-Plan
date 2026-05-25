@@ -99,7 +99,7 @@ class _SubConfig(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class PhysicsConfig(_SubConfig):
+class _PhysicsConfig(_SubConfig):
     """Physical constants for the dive environment."""
 
     water_density: float = Field(
@@ -124,7 +124,7 @@ class PhysicsConfig(_SubConfig):
         return self.water_density * self.gravity * 10
 
 
-class DivePlanningConfig(_SubConfig):
+class _DivePlanningConfig(_SubConfig):
     """Ascent/descent rates and stop parameters."""
 
     ascent_rate: float = Field(
@@ -163,7 +163,7 @@ class DivePlanningConfig(_SubConfig):
     )
 
 
-class GasConfig(_SubConfig):
+class _GasConfig(_SubConfig):
     """Gas planning limits and SAC rates."""
 
     min_ppo2_bar: float = Field(
@@ -222,9 +222,7 @@ _PROJECT_FILE = "diveplan.config.json"
 _USER_FILE = Path.home() / ".diveplan" / "config.json"
 
 
-def _try_load(
-    path: Path | str, source: str, config_cls: type[DiveConfig]
-) -> "DiveConfig | None":
+def _try_load(path: Path | str, source: str, config_cls: type[DiveConfig]) -> "DiveConfig | None":
     """Attempt to load a DiveConfig from a file. Returns None on any failure."""
     try:
         cfg = config_cls.from_json(path=str(path))
@@ -233,9 +231,7 @@ def _try_load(
     except FileNotFoundError:
         return None  # missing file is silent — not an error
     except Exception as e:
-        logger.warning(
-            "diveplan: invalid config at %s (%s) — %s, skipping", path, source, e
-        )
+        logger.warning("diveplan: invalid config at %s (%s) — %s, skipping", path, source, e)
         return None
 
 
@@ -297,9 +293,9 @@ class DiveConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    physics: PhysicsConfig = Field(default_factory=PhysicsConfig)
-    planning: DivePlanningConfig = Field(default_factory=DivePlanningConfig)
-    gas: GasConfig = Field(default_factory=GasConfig)
+    physics: _PhysicsConfig = Field(default_factory=_PhysicsConfig)
+    planning: _DivePlanningConfig = Field(default_factory=_DivePlanningConfig)
+    gas: _GasConfig = Field(default_factory=_GasConfig)
 
     # class-level state — shared across all instances
     _default: ClassVar[DiveConfig | None] = None
@@ -336,16 +332,12 @@ class DiveConfig(BaseModel):
 
     def __enter__(self) -> DiveConfig:
         DiveConfig._stack.append(self)
-        logger.debug(
-            "diveplan: config context entered (stack depth %d)", len(DiveConfig._stack)
-        )
+        logger.debug("diveplan: config context entered (stack depth %d)", len(DiveConfig._stack))
         return self
 
     def __exit__(self, *_: object) -> None:
         DiveConfig._stack.pop()
-        logger.debug(
-            "diveplan: config context exited (stack depth %d)", len(DiveConfig._stack)
-        )
+        logger.debug("diveplan: config context exited (stack depth %d)", len(DiveConfig._stack))
 
     # -------------------------------------------------------------------
     # Serialization
