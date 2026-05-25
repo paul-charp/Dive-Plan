@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "diveplan"
+version = "0.1.0"
+description = "Python library for dive planning and decompression calculation. Extensible deco algorithm core designed for both single dive planning and large-scale simulation."
+readme = "README.md"
+requires-python = ">=3.14"
+license = { text = "MIT" }
+dependencies = [
+    "pydantic>=2.13.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "ruff", "mypy"]
+
+[project.entry-points."diveplan.models"]
+zhl16c = "diveplan.models.buhlmann.zhl16:ZHL16C"
+
+[project.entry-points."diveplan.formatters"]
+json = "diveplan.dive.formatters.json:JSONFormatter"
+csv = "diveplan.dive.formatters.csv:CSVFormatter"
+
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+
+[tool.mypy]
+strict = true
+python_version = "3.14"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
