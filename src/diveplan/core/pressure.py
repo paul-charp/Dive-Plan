@@ -43,7 +43,9 @@ class Pressure:
 
     def __init__(self, mbar: int) -> None:
         if mbar < 0:
-            raise ValueError(f"Pressure cannot be negative (got {mbar} mbar). Use plain int mbar for signed deltas.")
+            raise ValueError(
+                f"Pressure cannot be negative (got {mbar} mbar). Use plain int mbar for signed deltas."
+            )
         object.__setattr__(self, "_mbar", int(mbar))
 
     @classmethod
@@ -91,7 +93,9 @@ class Pressure:
         (e.g. altitude surface, though that shouldn't arise in normal use).
         """
         physics = DiveConfig.current().physics
-        return (self._mbar - physics.surface_pressure_mbar) / physics.pressure_per_meter_mbar
+        return (
+            self._mbar - physics.surface_pressure_mbar
+        ) / physics.pressure_per_meter_mbar
 
     # ------------------------------------------------------------------
     # Immutability guard
@@ -126,7 +130,9 @@ class Pressure:
         if isinstance(scalar, (int, float)):
             result = round(self._mbar * scalar)
             if result < 0:
-                raise ValueError(f"Pressure * {scalar} yields negative result ({result} mbar).")
+                raise ValueError(
+                    f"Pressure * {scalar} yields negative result ({result} mbar)."
+                )
             return Pressure(result)
         return NotImplemented
 
@@ -145,7 +151,9 @@ class Pressure:
                 raise ZeroDivisionError("Cannot divide Pressure by zero.")
             result = round(self._mbar / other)
             if result < 0:
-                raise ValueError(f"Pressure / {other} yields negative result ({result} mbar).")
+                raise ValueError(
+                    f"Pressure / {other} yields negative result ({result} mbar)."
+                )
             return Pressure(result)
         return NotImplemented
 

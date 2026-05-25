@@ -21,7 +21,12 @@ Extension points (import directly from submodules):
 import logging
 
 # -- core types ----------------------------------------------------------------
-from diveplan.core.config import DiveConfig, _DivePlanningConfig, _GasConfig, _PhysicsConfig
+from diveplan.core.config import (
+    DiveConfig,
+    _DivePlanningConfig,
+    _GasConfig,
+    _PhysicsConfig,
+)
 from diveplan.core.gas import Gas
 from diveplan.core.pressure import Pressure
 
@@ -90,3 +95,5 @@ __all__ = [
     # "Dive",
     # "DiveReport",
 ]
+
+__version__ = "0.1.0"

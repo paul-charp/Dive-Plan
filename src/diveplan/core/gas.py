@@ -53,7 +53,9 @@ class Gas:
         if fn2 < 0:
             raise ValueError(f"fn2 must be >= 0, got {fn2:.6f} (fo2={fo2}, fhe={fhe})")
         if abs(fo2 + fhe + fn2 - 1.0) > 1e-6:
-            raise ValueError(f"Gas fractions must sum to 1.0, got {fo2 + fhe + fn2:.8f}")
+            raise ValueError(
+                f"Gas fractions must sum to 1.0, got {fo2 + fhe + fn2:.8f}"
+            )
         object.__setattr__(self, "_fo2", float(fo2))
         object.__setattr__(self, "_fhe", float(fhe))
         object.__setattr__(self, "_fn2", float(fn2))

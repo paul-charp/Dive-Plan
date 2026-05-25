@@ -222,7 +222,9 @@ _PROJECT_FILE = "diveplan.config.json"
 _USER_FILE = Path.home() / ".diveplan" / "config.json"
 
 
-def _try_load(path: Path | str, source: str, config_cls: type[DiveConfig]) -> "DiveConfig | None":
+def _try_load(
+    path: Path | str, source: str, config_cls: type[DiveConfig]
+) -> "DiveConfig | None":
     """Attempt to load a DiveConfig from a file. Returns None on any failure."""
     try:
         cfg = config_cls.from_json(path=str(path))
@@ -231,7 +233,9 @@ def _try_load(path: Path | str, source: str, config_cls: type[DiveConfig]) -> "D
     except FileNotFoundError:
         return None  # missing file is silent — not an error
     except Exception as e:
-        logger.warning("diveplan: invalid config at %s (%s) — %s, skipping", path, source, e)
+        logger.warning(
+            "diveplan: invalid config at %s (%s) — %s, skipping", path, source, e
+        )
         return None
 
 
@@ -332,12 +336,16 @@ class DiveConfig(BaseModel):
 
     def __enter__(self) -> DiveConfig:
         DiveConfig._stack.append(self)
-        logger.debug("diveplan: config context entered (stack depth %d)", len(DiveConfig._stack))
+        logger.debug(
+            "diveplan: config context entered (stack depth %d)", len(DiveConfig._stack)
+        )
         return self
 
     def __exit__(self, *_: object) -> None:
         DiveConfig._stack.pop()
-        logger.debug("diveplan: config context exited (stack depth %d)", len(DiveConfig._stack))
+        logger.debug(
+            "diveplan: config context exited (stack depth %d)", len(DiveConfig._stack)
+        )
 
     # -------------------------------------------------------------------
     # Serialization
