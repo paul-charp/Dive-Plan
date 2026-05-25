@@ -13,11 +13,17 @@ from diveplan.core.config import (
     _ENV_VAR,
     _ENV_VAR_DISABLE,
     _PROJECT_FILE,
-    _USER_FILE,
+    _USER_FILE,  # NOQA
     DiveConfig,
-    DivePlanningConfig,
-    GasConfig,
-    PhysicsConfig,
+)
+from diveplan.core.config import (
+    _DivePlanningConfig as DivePlanningConfig,
+)
+from diveplan.core.config import (
+    _GasConfig as GasConfig,
+)
+from diveplan.core.config import (
+    _PhysicsConfig as PhysicsConfig,
 )
 
 # ---------------------------------------------------------------------------
