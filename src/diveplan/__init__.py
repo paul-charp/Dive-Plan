@@ -22,6 +22,7 @@ import logging
 
 # -- core types ----------------------------------------------------------------
 from diveplan.core.config import DiveConfig, _DivePlanningConfig, _GasConfig, _PhysicsConfig
+from diveplan.core.gas import Gas
 from diveplan.core.pressure import Pressure
 
 # populated as subsequent modules are implemented:
@@ -76,13 +77,12 @@ logging.getLogger("diveplan").addHandler(logging.NullHandler())
 
 # -- public surface ------------------------------------------------------------
 __all__ = [
-    # config
     "DiveConfig",
     "diveconfig",
     # core types
     "Pressure",
+    "Gas",
     # populated as implemented:
-    # "GasMix",
     # "DiveStep",
     # "StepKind",
     # "AscentMode",
