@@ -39,6 +39,11 @@ class Gas:
 
     __slots__ = ("_fo2", "_fhe", "_fn2")
 
+    # For type checker only — actual storage is in __slots__ for immutability and memory efficiency.
+    _fo2: float
+    _fhe: float
+    _fn2: float
+
     def __init__(self, fo2: float, fhe: float = 0.0) -> None:
         fn2 = 1.0 - fo2 - fhe
         if fo2 < 0:
@@ -203,7 +208,7 @@ class Gas:
     # Partial pressures
     # ------------------------------------------------------------------
 
-    def ppo2(self, pressure: Pressure) -> Pressure:  # noqa: F821
+    def ppo2(self, pressure: Pressure) -> Pressure:
         """Return the partial pressure of O2 at the given ambient pressure.
 
         Args:
@@ -214,7 +219,7 @@ class Gas:
         """
         return pressure * self._fo2
 
-    def pphe(self, pressure: Pressure) -> Pressure:  # noqa: F821
+    def pphe(self, pressure: Pressure) -> Pressure:
         """Return the partial pressure of He at the given ambient pressure.
 
         Args:
@@ -225,7 +230,7 @@ class Gas:
         """
         return pressure * self._fhe
 
-    def ppn2(self, pressure: Pressure) -> Pressure:  # noqa: F821
+    def ppn2(self, pressure: Pressure) -> Pressure:
         """Return the partial pressure of N2 at the given ambient pressure.
 
         Args:
@@ -240,7 +245,7 @@ class Gas:
     # Limits
     # ------------------------------------------------------------------
 
-    def mod(self, *, ppo2_bar: float) -> Pressure:  # noqa: F821
+    def mod(self, *, ppo2_bar: float) -> Pressure:
         """Return the maximum operating depth (MOD) for a given ppO2 limit.
 
         Args:
@@ -264,7 +269,7 @@ class Gas:
 
         return Pressure.from_bar(ppo2_bar / self._fo2)
 
-    def end(self, pressure: Pressure) -> Pressure:  # noqa: F821
+    def end(self, pressure: Pressure) -> Pressure:
         """Return the equivalent narcotic depth (END) at the given pressure.
 
         Helium is assumed non-narcotic; the narcotic fraction is
