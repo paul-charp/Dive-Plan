@@ -19,6 +19,8 @@ Depth conversion:
 Dependency: Pressure -> DiveConfig (one way only, never reversed).
 """
 
+from typing import overload
+
 from diveplan.core.config import DiveConfig
 
 
@@ -49,19 +51,19 @@ class Pressure:
         object.__setattr__(self, "_mbar", int(mbar))
 
     @classmethod
-    def from_bar(cls, bar: float) -> "Pressure":
+    def from_bar(cls, bar: float) -> Pressure:
         """Construct from bar. Rounds to nearest mbar."""
         return cls(round(bar * 1000))
 
     @classmethod
-    def from_mbar(cls, mbar: float) -> "Pressure":
+    def from_mbar(cls, mbar: float) -> Pressure:
         """Construct from float mbar. Rounds to nearest integer mbar."""
         if mbar < 0:
             raise ValueError(f"Pressure cannot be negative (got {mbar} mbar).")
         return cls(round(mbar))
 
     @classmethod
-    def from_depth_m(cls, depth_m: float) -> "Pressure":
+    def from_depth_m(cls, depth_m: float) -> Pressure:
         """Construct from depth in metres using the current DiveConfig environment.
 
         Reads DiveConfig.current().physics — context manager overrides apply:
@@ -111,7 +113,7 @@ class Pressure:
     # Arithmetic
     # ------------------------------------------------------------------
 
-    def __add__(self, other: object) -> "Pressure":
+    def __add__(self, other: object) -> Pressure:
         if isinstance(other, Pressure):
             return Pressure(self._mbar + other._mbar)
         return NotImplemented
@@ -126,7 +128,7 @@ class Pressure:
             return self._mbar - other._mbar
         return NotImplemented
 
-    def __mul__(self, scalar: object) -> "Pressure":
+    def __mul__(self, scalar: object) -> Pressure:
         if isinstance(scalar, (int, float)):
             result = round(self._mbar * scalar)
             if result < 0:
@@ -136,17 +138,21 @@ class Pressure:
             return Pressure(result)
         return NotImplemented
 
-    def __rmul__(self, scalar: object) -> "Pressure":
+    def __rmul__(self, scalar: object) -> Pressure:
         return self.__mul__(scalar)
 
-    def __truediv__(self, other: object) -> "float | Pressure":
+    @overload
+    def __truediv__(self, other: Pressure) -> float: ...
+    @overload
+    def __truediv__(self, other: int | float) -> Pressure: ...
+
+    def __truediv__(self, other: object) -> float | Pressure:
         if isinstance(other, Pressure):
-            # Pressure / Pressure → dimensionless ratio
             if other._mbar == 0:
                 raise ZeroDivisionError("Cannot divide Pressure by zero Pressure.")
             return self._mbar / other._mbar
+
         if isinstance(other, (int, float)):
-            # Pressure / scalar → scaled Pressure
             if other == 0:
                 raise ZeroDivisionError("Cannot divide Pressure by zero.")
             result = round(self._mbar / other)
@@ -155,6 +161,7 @@ class Pressure:
                     f"Pressure / {other} yields negative result ({result} mbar)."
                 )
             return Pressure(result)
+
         return NotImplemented
 
     # ------------------------------------------------------------------
