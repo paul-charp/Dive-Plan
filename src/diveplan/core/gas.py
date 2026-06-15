@@ -82,6 +82,11 @@ class Gas:
         """Nitrogen fraction (0.0-1.0), derived as ``1 - fo2 - fhe``."""
         return self._fn2
 
+    @property
+    def name(self) -> str:
+        """Human-readable name for this gas, e.g. "Air", "EAN32", "TX21/35"."""
+        return str(self)
+
     # ------------------------------------------------------------------
     # Named constructors
     # ------------------------------------------------------------------
@@ -264,8 +269,6 @@ class Gas:
             >>> Gas.nitrox(0.32).mod(ppo2_bar=1.4).bar
             4.375
         """
-        from diveplan.core.pressure import Pressure  # local to avoid circular
-
         if ppo2_bar <= 0:
             raise ValueError(f"ppo2_bar must be > 0, got {ppo2_bar}")
 
@@ -292,7 +295,7 @@ class Gas:
         *,
         trimix: bool = False,
         hypoxic: bool = False,
-    ) -> "Gas":
+    ) -> Gas:
         """Return the optimal gas mix for the given depth.
 
         Maximises ``fo2`` within the ppO2 and END/ppN2 constraints
