@@ -1,21 +1,23 @@
 """
 diveplan — dive planning and decompression calculation library.
 
-Public API
-----------
-Core types:
-    Pressure, DiveStep, StepKind, AscentMode
-    GasMix, DiveConfig
-    Dive, DiveReport, GasPlan
+**Core types**
 
-Config proxy:
-    diveconfig      — forwards attribute access to DiveConfig.current()
+* ``Pressure`` — integer-millibar pressure value type
+* ``Gas`` — O2/He/N2 breathing mixture
+* ``DiveSegment`` / ``SegmentKind`` — a single leg of a dive profile
+* ``DiveConfig`` — physics, planning, and gas configuration
 
-Extension points (import directly from submodules):
-    diveplan.models          — AbstractDecoModel, ZHL16C
-    diveplan.models.helpers  — Compartment, Gradient
-    diveplan.dive.formatters — ReportFormatter
-    diveplan.registry        — PluginRegistry
+**Config proxy**
+
+* ``diveconfig`` — forwards attribute access to ``DiveConfig.current()``
+
+**Extension points** (import directly from submodules)
+
+* ``diveplan.registry`` — ``PluginRegistry``
+
+The planning, deco-model, and dive/report layers are still under construction;
+their public symbols will be re-exported here as they land.
 """
 
 import logging
@@ -27,15 +29,13 @@ from diveplan.core.config import (
     _GasConfig,
     _PhysicsConfig,
 )
+from diveplan.core.dive_segment import DiveSegment, SegmentKind
 from diveplan.core.gas import Gas
 from diveplan.core.pressure import Pressure
 
-# populated as subsequent modules are implemented:
-# from diveplan.core.gas_mix import GasMix
-# from diveplan.core.dive_step import DiveStep, StepKind, AscentMode
+# Re-exported as subsequent layers are implemented:
 # from diveplan.planning.gas_plan import GasPlan
-# from diveplan.dive.dive import Dive
-# from diveplan.dive.report import DiveReport
+# from diveplan.dive.dive_profile import DiveProfile
 
 # -- config proxy --------------------------------------------------------------
 
@@ -82,18 +82,17 @@ logging.getLogger("diveplan").addHandler(logging.NullHandler())
 
 # -- public surface ------------------------------------------------------------
 __all__ = [
-    "DiveConfig",
-    "diveconfig",
-    # core types
+    # core value types
     "Pressure",
     "Gas",
-    # populated as implemented:
-    # "DiveStep",
-    # "StepKind",
-    # "AscentMode",
+    "DiveSegment",
+    "SegmentKind",
+    # configuration
+    "DiveConfig",
+    "diveconfig",
+    # re-exported as later layers land:
     # "GasPlan",
-    # "Dive",
-    # "DiveReport",
+    # "DiveProfile",
 ]
 
 __version__ = "0.1.0"
