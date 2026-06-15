@@ -9,7 +9,7 @@ experimentation platform.
 
 Default config loading — priority chain (highest to lowest)
 -----------------------------------------------------------
-1. DIVEPLAN_CONFIG env var        — path to a JSON config file
+1. DIVEPLAN_CONFIG_FILE env var   — path to a JSON config file
 2. ./diveplan.config.json         — project-level config in CWD
 3. ~/.diveplan/config.json        — user-level config in home directory
 4. factory defaults               — built-in defaults
@@ -21,6 +21,9 @@ Invalid files at any level are skipped with a warning and the next level is trie
 
 Usage
 -----
+
+.. code-block:: python
+
     # read and mutate the global config
     from diveplan.core.config import DiveConfig
 
@@ -65,12 +68,17 @@ Usage
 
 import logging
 import os
+from contextvars import ContextVar
 from pathlib import Path
 from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
+
+# Only DiveConfig is public. The sub-config classes (_PhysicsConfig, etc.) are
+# implementation details — users swap them via DiveConfig, never construct them.
+__all__ = ["DiveConfig"]
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +232,7 @@ _USER_FILE = Path.home() / ".diveplan" / "config.json"
 
 def _try_load(
     path: Path | str, source: str, config_cls: type[DiveConfig]
-) -> "DiveConfig | None":
+) -> DiveConfig | None:
     """Attempt to load a DiveConfig from a file. Returns None on any failure."""
     try:
         cfg = config_cls.from_json(path=str(path))
@@ -239,10 +247,10 @@ def _try_load(
         return None
 
 
-def _load_default_config() -> "DiveConfig":
+def _load_default_config() -> DiveConfig:
     """
     Resolve the startup default config following the priority chain:
-      1. DIVEPLAN_CONFIG env var
+      1. DIVEPLAN_CONFIG_FILE env var
       2. ./diveplan.config.json  (CWD)
       3. ~/.diveplan/config.json (user home)
       4. factory defaults
@@ -301,9 +309,16 @@ class DiveConfig(BaseModel):
     planning: _DivePlanningConfig = Field(default_factory=_DivePlanningConfig)
     gas: _GasConfig = Field(default_factory=_GasConfig)
 
-    # class-level state — shared across all instances
+    # Process-global default — shared across all instances and contexts.
     _default: ClassVar[DiveConfig | None] = None
-    _stack: ClassVar[list[DiveConfig]] = []
+
+    # Scoped override stack. A ContextVar (not a plain list) so that scoped
+    # overrides are isolated per thread and per asyncio task — essential for
+    # batch simulation, where many dives run in parallel under different
+    # physics/planning configs without stepping on each other.
+    _stack: ClassVar[ContextVar[tuple[DiveConfig, ...]]] = ContextVar(
+        "diveconfig_stack", default=()
+    )
 
     # -------------------------------------------------------------------
     # Global access
@@ -311,9 +326,10 @@ class DiveConfig(BaseModel):
 
     @classmethod
     def current(cls) -> DiveConfig:
-        """Return the active config — top of stack, or startup default."""
-        if cls._stack:
-            return cls._stack[-1]
+        """Return the active config — top of the (context-local) stack, or startup default."""
+        stack = cls._stack.get()
+        if stack:
+            return stack[-1]
         if cls._default is None:
             cls._default = _load_default_config()
         return cls._default
@@ -328,23 +344,25 @@ class DiveConfig(BaseModel):
     def reset_default(cls) -> None:
         """Restore factory defaults and clear the stack — useful in tests."""
         cls._default = None
-        cls._stack.clear()
+        cls._stack.set(())
 
     # -------------------------------------------------------------------
-    # Context manager — stack-based, supports nesting
+    # Context manager — stack-based, supports nesting, context-local
     # -------------------------------------------------------------------
 
     def __enter__(self) -> DiveConfig:
-        DiveConfig._stack.append(self)
+        stack = DiveConfig._stack.get()
+        DiveConfig._stack.set(stack + (self,))
         logger.debug(
-            "diveplan: config context entered (stack depth %d)", len(DiveConfig._stack)
+            "diveplan: config context entered (stack depth %d)", len(stack) + 1
         )
         return self
 
     def __exit__(self, *_: object) -> None:
-        DiveConfig._stack.pop()
+        stack = DiveConfig._stack.get()
+        DiveConfig._stack.set(stack[:-1])
         logger.debug(
-            "diveplan: config context exited (stack depth %d)", len(DiveConfig._stack)
+            "diveplan: config context exited (stack depth %d)", len(stack) - 1
         )
 
     # -------------------------------------------------------------------
