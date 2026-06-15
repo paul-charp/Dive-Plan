@@ -19,7 +19,11 @@ Depth conversion:
 Dependency: Pressure -> DiveConfig (one way only, never reversed).
 """
 
+from typing import overload
+
 from diveplan.core.config import DiveConfig
+
+__all__ = ["Pressure"]
 
 
 class Pressure:
@@ -43,23 +47,25 @@ class Pressure:
 
     def __init__(self, mbar: int) -> None:
         if mbar < 0:
-            raise ValueError(f"Pressure cannot be negative (got {mbar} mbar). Use plain int mbar for signed deltas.")
+            raise ValueError(
+                f"Pressure cannot be negative (got {mbar} mbar). Use plain int mbar for signed deltas."
+            )
         object.__setattr__(self, "_mbar", int(mbar))
 
     @classmethod
-    def from_bar(cls, bar: float) -> "Pressure":
+    def from_bar(cls, bar: float) -> Pressure:
         """Construct from bar. Rounds to nearest mbar."""
         return cls(round(bar * 1000))
 
     @classmethod
-    def from_mbar(cls, mbar: float) -> "Pressure":
+    def from_mbar(cls, mbar: float) -> Pressure:
         """Construct from float mbar. Rounds to nearest integer mbar."""
         if mbar < 0:
             raise ValueError(f"Pressure cannot be negative (got {mbar} mbar).")
         return cls(round(mbar))
 
     @classmethod
-    def from_depth_m(cls, depth_m: float) -> "Pressure":
+    def from_depth_m(cls, depth_m: float) -> Pressure:
         """Construct from depth in metres using the current DiveConfig environment.
 
         Reads DiveConfig.current().physics — context manager overrides apply:
@@ -70,16 +76,125 @@ class Pressure:
         mbar = physics.surface_pressure_mbar + depth_m * physics.pressure_per_meter_mbar
         return cls(round(mbar))
 
+    @classmethod
+    def from_atm(cls, atm: float) -> Pressure:
+        """Construct from atmospheres. Rounds to nearest mbar."""
+        physics = DiveConfig.current().physics
+        return cls.from_mbar(atm * physics.surface_pressure_mbar)
+
+    # psi ↔ mbar: 1 mbar = 0.0145038 psi  ⇒  mbar = psi / 0.0145038
+    _PSI_PER_MBAR = 0.0145038
+
+    @classmethod
+    def from_psi(cls, psi: float) -> Pressure:
+        """Construct from psi. Rounds to nearest mbar."""
+        return cls.from_mbar(psi / cls._PSI_PER_MBAR)
+
+    @classmethod
+    def from_depth_ft(cls, depth_ft: float) -> Pressure:
+        """Construct from depth in feet using the current DiveConfig environment.
+
+        Reads DiveConfig.current().physics — context manager overrides apply:
+            with DiveConfig(physics=_PhysicsConfig(surface_pressure_mbar=800)):
+                Pressure.from_depth_ft(130)  # altitude dive
+        """
+        physics = DiveConfig.current().physics
+        mbar = (
+            physics.surface_pressure_mbar
+            + depth_ft * 0.3048 * physics.pressure_per_meter_mbar
+        )
+        return cls(round(mbar))
+
+    @classmethod
+    def surface(cls) -> Pressure:
+        """Convenience constructor for surface pressure in the current DiveConfig environment."""
+        return cls.from_atm(1.0)
+
+    @classmethod
+    def from_str(cls, s: str) -> Pressure:
+        """Parse a pressure from a string with unit suffix. Supported formats:
+            "4.013 bar"
+            "4013 mbar"
+            "1 atm"
+            "14.7 psi"
+            "30 m"
+            "98 ft"
+
+        Args:
+            s: Input string to parse.
+
+        Raises:
+            ValueError: If the input string has an invalid format or unit.
+            ValueError: If the parsed value is negative.
+            ValueError: If the parsed value is not a valid number.
+
+        Returns:
+            Pressure: The parsed pressure instance.
+        """
+
+        s = s.strip().lower()
+
+        # NB: order matters — "mbar" ends with "bar", and "atm" ends with "m",
+        # so the more specific suffixes must be tested first.
+        if s.endswith("mbar"):
+            try:
+                mbar = float(s[:-4].strip())
+                return cls.from_mbar(mbar)
+            except ValueError:
+                raise ValueError(f"Invalid pressure string: '{s}'")
+
+        elif s.endswith("bar"):
+            try:
+                bar = float(s[:-3].strip())
+                return cls.from_bar(bar)
+            except ValueError:
+                raise ValueError(f"Invalid pressure string: '{s}'")
+
+        elif s.endswith("atm"):
+            try:
+                atm = float(s[:-3].strip())
+                return cls.from_atm(atm)
+            except ValueError:
+                raise ValueError(f"Invalid pressure string: '{s}'")
+
+        elif s.endswith("psi"):
+            try:
+                psi = float(s[:-3].strip())
+                return cls.from_psi(psi)
+            except ValueError:
+                raise ValueError(f"Invalid pressure string: '{s}'")
+
+        elif s.endswith("ft"):
+            try:
+                depth_ft = float(s[:-2].strip())
+                return cls.from_depth_ft(depth_ft)
+            except ValueError:
+                raise ValueError(f"Invalid pressure string: '{s}'")
+
+        elif s.endswith("m"):
+            try:
+                depth_m = float(s[:-1].strip())
+                return cls.from_depth_m(depth_m)
+            except ValueError:
+                raise ValueError(f"Invalid pressure string: '{s}'")
+
+        else:
+            raise ValueError(
+                f"Invalid pressure string: '{s}' (must end with 'bar', 'mbar', 'atm', 'psi', 'ft', or 'm')"
+            )
+
     # ------------------------------------------------------------------
     # Properties
     # ------------------------------------------------------------------
 
     @property
     def mbar(self) -> int:
+        """Absolute pressure in integer millibar (the ground-truth value)."""
         return self._mbar
 
     @property
     def bar(self) -> float:
+        """Absolute pressure in bar."""
         return self._mbar / 1000.0
 
     @property
@@ -91,7 +206,38 @@ class Pressure:
         (e.g. altitude surface, though that shouldn't arise in normal use).
         """
         physics = DiveConfig.current().physics
-        return (self._mbar - physics.surface_pressure_mbar) / physics.pressure_per_meter_mbar
+        return (
+            self._mbar - physics.surface_pressure_mbar
+        ) / physics.pressure_per_meter_mbar
+
+    @property
+    def depth_ft(self) -> float:
+        """Depth in feet in the context of the current DiveConfig environment.
+
+        Reads DiveConfig.current().physics — context manager overrides apply.
+        Returns a negative value if pressure is below surface pressure
+        (e.g. altitude surface, though that shouldn't arise in normal use).
+        """
+        physics = DiveConfig.current().physics
+        return (self._mbar - physics.surface_pressure_mbar) / (
+            0.3048 * physics.pressure_per_meter_mbar
+        )
+
+    @property
+    def atm(self) -> float:
+        """Absolute pressure in atmospheres, relative to the current surface pressure."""
+        physics = DiveConfig.current().physics
+        return self._mbar / physics.surface_pressure_mbar
+
+    @property
+    def psi(self) -> float:
+        """Absolute pressure in pounds per square inch."""
+        return self._mbar * self._PSI_PER_MBAR
+
+    @property
+    def is_surface(self) -> bool:
+        physics = DiveConfig.current().physics
+        return self._mbar <= physics.surface_pressure_mbar
 
     # ------------------------------------------------------------------
     # Immutability guard
@@ -107,7 +253,7 @@ class Pressure:
     # Arithmetic
     # ------------------------------------------------------------------
 
-    def __add__(self, other: object) -> "Pressure":
+    def __add__(self, other: object) -> Pressure:
         if isinstance(other, Pressure):
             return Pressure(self._mbar + other._mbar)
         return NotImplemented
@@ -122,31 +268,40 @@ class Pressure:
             return self._mbar - other._mbar
         return NotImplemented
 
-    def __mul__(self, scalar: object) -> "Pressure":
+    def __mul__(self, scalar: object) -> Pressure:
         if isinstance(scalar, (int, float)):
             result = round(self._mbar * scalar)
             if result < 0:
-                raise ValueError(f"Pressure * {scalar} yields negative result ({result} mbar).")
+                raise ValueError(
+                    f"Pressure * {scalar} yields negative result ({result} mbar)."
+                )
             return Pressure(result)
         return NotImplemented
 
-    def __rmul__(self, scalar: object) -> "Pressure":
+    def __rmul__(self, scalar: object) -> Pressure:
         return self.__mul__(scalar)
 
-    def __truediv__(self, other: object) -> "float | Pressure":
+    @overload
+    def __truediv__(self, other: Pressure) -> float: ...
+    @overload
+    def __truediv__(self, other: int | float) -> Pressure: ...
+
+    def __truediv__(self, other: object) -> float | Pressure:
         if isinstance(other, Pressure):
-            # Pressure / Pressure → dimensionless ratio
             if other._mbar == 0:
                 raise ZeroDivisionError("Cannot divide Pressure by zero Pressure.")
             return self._mbar / other._mbar
+
         if isinstance(other, (int, float)):
-            # Pressure / scalar → scaled Pressure
             if other == 0:
                 raise ZeroDivisionError("Cannot divide Pressure by zero.")
             result = round(self._mbar / other)
             if result < 0:
-                raise ValueError(f"Pressure / {other} yields negative result ({result} mbar).")
+                raise ValueError(
+                    f"Pressure / {other} yields negative result ({result} mbar)."
+                )
             return Pressure(result)
+
         return NotImplemented
 
     # ------------------------------------------------------------------
@@ -184,6 +339,29 @@ class Pressure:
     # ------------------------------------------------------------------
     # Display
     # ------------------------------------------------------------------
+
+    def to_str(self, unit: str = "bar") -> str:
+        """Format pressure as a string in the specified unit.
+
+        Supported units: 'bar', 'mbar', 'atm', 'psi', 'm' (depth in metres), 'ft' (depth in feet).
+        """
+        unit = unit.lower()
+        if unit == "bar":
+            return f"{self.bar:.3f} bar"
+        elif unit == "mbar":
+            return f"{self.mbar} mbar"
+        elif unit == "atm":
+            return f"{self.atm:.3f} atm"
+        elif unit == "psi":
+            return f"{self.psi:.2f} psi"
+        elif unit == "m":
+            return f"{self.depth_m:.1f} m"
+        elif unit == "ft":
+            return f"{self.depth_ft:.1f} ft"
+        else:
+            raise ValueError(
+                f"Unsupported unit '{unit}' for Pressure.to_str (must be 'bar', 'mbar', 'atm', 'psi', 'm', or 'ft')."
+            )
 
     def __repr__(self) -> str:
         return f"Pressure({self._mbar})"

@@ -53,7 +53,9 @@ class Gas:
         if fn2 < 0:
             raise ValueError(f"fn2 must be >= 0, got {fn2:.6f} (fo2={fo2}, fhe={fhe})")
         if abs(fo2 + fhe + fn2 - 1.0) > 1e-6:
-            raise ValueError(f"Gas fractions must sum to 1.0, got {fo2 + fhe + fn2:.8f}")
+            raise ValueError(
+                f"Gas fractions must sum to 1.0, got {fo2 + fhe + fn2:.8f}"
+            )
         object.__setattr__(self, "_fo2", float(fo2))
         object.__setattr__(self, "_fhe", float(fhe))
         object.__setattr__(self, "_fn2", float(fn2))
@@ -79,6 +81,11 @@ class Gas:
     def fn2(self) -> float:
         """Nitrogen fraction (0.0-1.0), derived as ``1 - fo2 - fhe``."""
         return self._fn2
+
+    @property
+    def name(self) -> str:
+        """Human-readable name for this gas, e.g. "Air", "EAN32", "TX21/35"."""
+        return str(self)
 
     # ------------------------------------------------------------------
     # Named constructors
@@ -262,8 +269,6 @@ class Gas:
             >>> Gas.nitrox(0.32).mod(ppo2_bar=1.4).bar
             4.375
         """
-        from diveplan.core.pressure import Pressure  # local to avoid circular
-
         if ppo2_bar <= 0:
             raise ValueError(f"ppo2_bar must be > 0, got {ppo2_bar}")
 
@@ -290,7 +295,7 @@ class Gas:
         *,
         trimix: bool = False,
         hypoxic: bool = False,
-    ) -> "Gas":
+    ) -> Gas:
         """Return the optimal gas mix for the given depth.
 
         Maximises ``fo2`` within the ppO2 and END/ppN2 constraints
