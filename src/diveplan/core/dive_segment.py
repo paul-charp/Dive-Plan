@@ -6,7 +6,7 @@ from typing import Iterator
 from diveplan.core.gas import Gas
 from diveplan.core.pressure import Pressure
 
-__all__ = ["SegmentKind", "SegmentKindMember", "DiveSegment"]
+__all__ = ["SegmentKind", "DiveSegment"]
 
 # ------------------------------------------------------------------
 # Segment kinds
@@ -35,7 +35,7 @@ class SegmentKind:
 
     # Convenience members / default values for each parent kind
     DESCENT = Descent.DESCENT
-    ASCENT = Ascent.DECO_ASCENT
+    ASCENT = Ascent.FORCED_ASCENT
     CONSTANT = Constant.BOTTOM
 
     # Union of all possible segment kinds for type annotations
@@ -48,7 +48,7 @@ class DiveSegment:
 
     """
 
-    __slots__ = ("start_pressure", "end_pressure", "duration", "gas", "kind")
+    __slots__ = "start_pressure", "end_pressure", "duration", "gas", "kind"
 
     # Just for type checker — actual storage is in __slots__ for immutability and memory efficiency.
     start_pressure: Pressure
@@ -71,10 +71,18 @@ class DiveSegment:
         Args:
             start_pressure: Starting absolute pressure of the segment.
             end_pressure: Ending absolute pressure of the segment.
-            duration_minutes: Duration of the segment (in minutes or timedelta).
+            duration: Duration of the segment (minutes as int/float, or a timedelta).
             gas: Gas mixture for the segment.
             ascent_kind: If the segment is an ascent, the kind of ascent. Defaults to SegmentKind.ASCENT.
             constant_kind: If the segment is at constant depth, the kind of constant depth. Defaults to SegmentKind.CONSTANT.
+
+        Raises:
+            ValueError: If the duration is negative, or zero for anything other
+                than a gas switch. A zero-duration *traverse* is degenerate (no
+                time elapses, rate undefined), so it is rejected. A gas switch is
+                a boundary event at constant depth — it is materialized as a
+                segment for serialization/display and may legitimately have zero
+                duration (an instant switch, gas_switch_minutes = 0).
         """
 
         self.start_pressure = start_pressure
@@ -86,6 +94,19 @@ class DiveSegment:
 
         self.gas = gas
         self.kind = self._determine_kind(ascent_kind, constant_kind)
+
+        if self.duration < timedelta(0):
+            raise ValueError(
+                f"DiveSegment duration cannot be negative, got {self.duration}."
+            )
+        if (
+            self.duration == timedelta(0)
+            and self.kind is not SegmentKind.Constant.GAS_SWITCH
+        ):
+            raise ValueError(
+                f"DiveSegment duration must be strictly positive, got {self.duration}. "
+                "Only a gas switch (constant depth) may have zero duration."
+            )
 
     def _determine_kind(
         self,
@@ -105,15 +126,25 @@ class DiveSegment:
 
     @property
     def average_pressure(self) -> Pressure:
+        """Mean of the start and end pressures."""
         return (self.start_pressure + self.end_pressure) / 2
 
     @property
     def absolute_pressure_change(self) -> Pressure:
-        """Returns the absolute pressure change from start to end. Can be negative (ascent) or positive (descent, or no change if constant)."""
+        """Magnitude of the pressure change from start to end (always non-negative)."""
         return Pressure.from_mbar(abs(self.end_pressure - self.start_pressure))
 
     @property
     def pressure_rate(self) -> float:
+        """Signed rate of pressure change in mbar per second.
+
+        Positive when descending, negative when ascending, and zero for a
+        constant-depth segment (including a possibly zero-duration gas switch,
+        which would otherwise divide by zero).
+        """
+        # Constant depth has zero rate by definition — avoids a 0/0 division.
+        if self.start_pressure == self.end_pressure:
+            return 0.0
         return (self.end_pressure - self.start_pressure) / self.duration.total_seconds()
 
     # -------------------------------------------------------------------
@@ -149,9 +180,8 @@ class DiveSegment:
         """Pressure at fraction (0 to 1) into the segment. Linear interpolation."""
         self._validate_fraction(fraction)
 
-        return (
-            self.start_pressure + (self.end_pressure - self.start_pressure) * fraction
-        )
+        delta_mbar = (self.end_pressure - self.start_pressure) * fraction
+        return Pressure.from_mbar(self.start_pressure.mbar + delta_mbar)
 
     def time_at_pressure(self, pressure: Pressure) -> timedelta:
         """Time at which a given pressure is reached. Linear interpolation."""
@@ -217,6 +247,12 @@ class DiveSegment:
         The resulting segment takes the start pressure of self and end pressure of other, with duration combined.
         Gas and kind are taken from self if continuous.
         Ascent and constant kinds are preserved if self is ascent or constant, otherwise default to SegmentKind.ASCENT or SegmentKind.CONSTANT.
+
+        Known limitation: the merged segment always keeps ``self.gas``. When
+        ``force=True`` is used to merge two segments with *different* gases (e.g.
+        across a gas discontinuity), ``other.gas`` is silently discarded. The
+        caller is responsible for only force-merging segments where dropping the
+        other gas is acceptable.
 
         Args:
             other: The other segment to merge with.
@@ -331,11 +367,10 @@ class DiveSegment:
             and self.kind == other.kind
         )
 
-    # TODO: Test repr
     def __repr__(self) -> str:
         return (
-            f"DiveSegment(start_pressure={self.start_pressure}, "
-            f"end_pressure={self.end_pressure}, "
+            f"DiveSegment(start_pressure={repr(self.start_pressure)}, "
+            f"end_pressure={repr(self.end_pressure)}, "
             f"duration={self.duration}, "
             f"gas={self.gas}, "
             f"kind={self.kind})"
@@ -346,8 +381,8 @@ class DiveSegment:
             return f"{self.kind.name} segment at {self.start_pressure} for {self.duration}, breathing {self.gas}"
 
         return (
-            f"{self.kind.name} segment from {self.start_pressure} to {self.end_pressure} "
-            f"over {self.duration}, breathing {self.gas}"
+            f"{self.kind.name} segment from {self.start_pressure.depth_m:.1f}m to {self.end_pressure.depth_m:.1f}m "
+            f"over {self.duration.total_seconds() / 60:.1f} minutes, breathing {self.gas.name}"
         )
 
     # TODO: to_dict, from_dict, to_json, from_json, etc.
