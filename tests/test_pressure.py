@@ -124,6 +124,95 @@ class TestProperties:
 
 
 # ------------------------------------------------------------------
+# Alternate constructors & unit properties (real factory config)
+# ------------------------------------------------------------------
+
+
+class TestAltConstructorsAndProperties:
+    def test_surface(self):
+        assert Pressure.surface().mbar == 1013
+
+    def test_from_atm(self):
+        assert Pressure.from_atm(2.0).mbar == 2026
+
+    def test_atm_property(self):
+        assert Pressure(2026).atm == pytest.approx(2.0)
+
+    def test_from_psi_value(self):
+        # 1 atm ≈ 14.696 psi ≈ 1013 mbar
+        assert Pressure.from_psi(14.696).mbar == pytest.approx(1013, abs=1)
+
+    def test_psi_property(self):
+        # absolute psi, not just round-trippable: 1013 mbar ≈ 14.7 psi
+        assert Pressure(1013).psi == pytest.approx(14.7, abs=0.05)
+
+    def test_psi_roundtrip(self):
+        assert Pressure.from_psi(32.0).psi == pytest.approx(32.0, abs=0.05)
+
+    def test_is_surface_true(self):
+        assert Pressure(1013).is_surface is True
+        assert Pressure(900).is_surface is True
+
+    def test_is_surface_false(self):
+        assert Pressure(2000).is_surface is False
+
+    def test_depth_ft_roundtrip(self):
+        assert Pressure.from_depth_ft(100.0).depth_ft == pytest.approx(100.0, abs=0.1)
+
+
+# ------------------------------------------------------------------
+# String parsing & formatting
+# ------------------------------------------------------------------
+
+
+class TestStringParsing:
+    @pytest.mark.parametrize(
+        "text, expected_mbar",
+        [
+            ("4.013 bar", 4013),
+            ("4013 mbar", 4013),
+            ("1 atm", 1013),
+            ("0 m", 1013),
+        ],
+    )
+    def test_from_str_units(self, text, expected_mbar):
+        assert Pressure.from_str(text).mbar == expected_mbar
+
+    def test_from_str_is_case_insensitive(self):
+        assert Pressure.from_str("4.013 BAR") == Pressure(4013)
+
+    def test_from_str_depth_uses_config(self):
+        # 30 m at factory salt water ≈ 1013 + 30 * 100.518
+        assert Pressure.from_str("30 m") == Pressure.from_depth_m(30)
+
+    def test_from_str_invalid_unit_raises(self):
+        with pytest.raises(ValueError, match="Invalid pressure string"):
+            Pressure.from_str("30 kelvin")
+
+    def test_from_str_invalid_number_raises(self):
+        with pytest.raises(ValueError, match="Invalid pressure string"):
+            Pressure.from_str("abc bar")
+
+    @pytest.mark.parametrize(
+        "unit, expected",
+        [
+            ("bar", "4.013 bar"),
+            ("mbar", "4013 mbar"),
+            ("atm", "3.962 atm"),
+        ],
+    )
+    def test_to_str_units(self, unit, expected):
+        assert Pressure(4013).to_str(unit) == expected
+
+    def test_to_str_invalid_unit_raises(self):
+        with pytest.raises(ValueError, match="Unsupported unit"):
+            Pressure(4013).to_str("kelvin")
+
+    def test_bar_str_roundtrip(self):
+        assert Pressure.from_str(Pressure(4013).to_str("bar")) == Pressure(4013)
+
+
+# ------------------------------------------------------------------
 # Immutability
 # ------------------------------------------------------------------
 

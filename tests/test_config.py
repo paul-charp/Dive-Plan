@@ -249,6 +249,32 @@ class TestContextManager:
             pass
         assert DiveConfig._default is original_default
 
+    def test_scoped_override_is_thread_isolated(self):
+        """A scoped override in one thread must not leak into another.
+
+        The override stack is a ContextVar, so each thread starts with the
+        startup default and only sees its own overrides.
+        """
+        import threading
+
+        seen: dict[str, float] = {}
+
+        def worker() -> None:
+            # Worker starts fresh — should NOT see the main thread's override.
+            seen["worker_before"] = DiveConfig.current().physics.water_density
+            with DiveConfig(physics=PhysicsConfig(water_density=1.0)):
+                seen["worker_inside"] = DiveConfig.current().physics.water_density
+
+        with DiveConfig(physics=PhysicsConfig(water_density=1.5)):
+            t = threading.Thread(target=worker)
+            t.start()
+            t.join()
+            seen["main_inside"] = DiveConfig.current().physics.water_density
+
+        assert seen["worker_before"] == 1.025  # factory default, not main's 1.5
+        assert seen["worker_inside"] == 1.0
+        assert seen["main_inside"] == 1.5  # worker's override did not leak back
+
 
 # ---------------------------------------------------------------------------
 # Default config loading — env var and file resolution
