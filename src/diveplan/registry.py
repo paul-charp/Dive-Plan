@@ -1,6 +1,6 @@
 from functools import cached_property
 from importlib.metadata import entry_points
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .models.base import BaseDecoModel
@@ -28,14 +28,14 @@ class PluginRegistry:
     def __init__(self) -> None:
         # Manual overrides live here — separate from the cached discovery.
         # Checked first so local overrides win over installed packages.
-        self._overrides: dict[str, type[BaseDecoModel]] = {}
+        self._overrides: dict[str, type[BaseDecoModel[Any]]] = {}
 
     @cached_property
-    def _discovered(self) -> dict[str, type[BaseDecoModel]]:
+    def _discovered(self) -> dict[str, type[BaseDecoModel[Any]]]:
         """Discovered once from entry points, then frozen."""
         from .models.base import BaseDecoModel
 
-        found: dict[str, type[BaseDecoModel]] = {}
+        found: dict[str, type[BaseDecoModel[Any]]] = {}
         for ep in entry_points(group=_ENTRY_POINT_GROUP):
             cls = ep.load()
             if not (isinstance(cls, type) and issubclass(cls, BaseDecoModel)):
@@ -47,24 +47,24 @@ class PluginRegistry:
         return found
 
     @property
-    def _all(self) -> dict[str, type[BaseDecoModel]]:
+    def _all(self) -> dict[str, type[BaseDecoModel[Any]]]:
         """Overrides shadow discovered plugins of the same name."""
         return {**self._discovered, **self._overrides}
 
     # ── Public API ──────────────────────────────────────────────────────────
 
-    def model(self, name: str) -> type[BaseDecoModel]:
+    def model(self, name: str) -> type[BaseDecoModel[Any]]:
         """Return the plugin class for *name*, or raise PluginNotFoundError."""
         plugins = self._all
         if name not in plugins:
             raise PluginNotFoundError(name, available=list(plugins))
         return plugins[name]
 
-    def all_models(self) -> dict[str, type[BaseDecoModel]]:
+    def all_models(self) -> dict[str, type[BaseDecoModel[Any]]]:
         """All registered plugins, keyed by name."""
         return dict(self._all)
 
-    def register_model(self, name: str, cls: type[BaseDecoModel]) -> None:
+    def register_model(self, name: str, cls: type[BaseDecoModel[Any]]) -> None:
         """
         Manually register a plugin class — escape hatch for tests,
         notebooks, or plugins that ship inside the core package.
