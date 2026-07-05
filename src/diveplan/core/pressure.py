@@ -19,11 +19,14 @@ Depth conversion:
 Dependency: Pressure -> DiveConfig (one way only, never reversed).
 """
 
-from typing import overload
+from typing import Literal, overload
 
 from diveplan.core.config import DiveConfig
 
-__all__ = ["Pressure"]
+__all__ = ["Pressure", "PressureUnit"]
+
+PressureUnit = Literal["bar", "mbar", "atm", "psi", "m", "ft"]
+"""Unit names accepted by :meth:`Pressure.to_str`."""
 
 
 class Pressure:
@@ -340,23 +343,23 @@ class Pressure:
     # Display
     # ------------------------------------------------------------------
 
-    def to_str(self, unit: str = "bar") -> str:
+    def to_str(self, unit: PressureUnit = "bar") -> str:
         """Format pressure as a string in the specified unit.
 
         Supported units: 'bar', 'mbar', 'atm', 'psi', 'm' (depth in metres), 'ft' (depth in feet).
         """
-        unit = unit.lower()
-        if unit == "bar":
+        u = unit.lower()
+        if u == "bar":
             return f"{self.bar:.3f} bar"
-        elif unit == "mbar":
+        elif u == "mbar":
             return f"{self.mbar} mbar"
-        elif unit == "atm":
+        elif u == "atm":
             return f"{self.atm:.3f} atm"
-        elif unit == "psi":
+        elif u == "psi":
             return f"{self.psi:.2f} psi"
-        elif unit == "m":
+        elif u == "m":
             return f"{self.depth_m:.1f} m"
-        elif unit == "ft":
+        elif u == "ft":
             return f"{self.depth_ft:.1f} ft"
         else:
             raise ValueError(
