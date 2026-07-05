@@ -33,9 +33,11 @@ from diveplan.core.dive_segment import DiveSegment, SegmentKind
 from diveplan.core.gas import Gas
 from diveplan.core.pressure import Pressure
 
-# Re-exported as subsequent layers are implemented:
-# from diveplan.planning.gas_plan import GasPlan
-# from diveplan.dive.dive_profile import DiveProfile
+# -- dive / planning layers ------------------------------------------------
+from diveplan.dive.dive_profile import DiveProfile
+from diveplan.dive.dive_result import DiveResult
+from diveplan.planning.ascent_plan import plan_ascent
+from diveplan.planning.gas_plan import GasPlan
 
 # -- config proxy --------------------------------------------------------------
 
@@ -90,9 +92,11 @@ __all__ = [
     # configuration
     "DiveConfig",
     "diveconfig",
-    # re-exported as later layers land:
-    # "GasPlan",
-    # "DiveProfile",
+    # dive / planning layers
+    "DiveProfile",
+    "DiveResult",
+    "GasPlan",
+    "plan_ascent",
 ]
 
 __version__ = "0.1.0"

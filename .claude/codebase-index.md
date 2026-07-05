@@ -1,6 +1,6 @@
 # diveplan codebase index
 
-Auto-generated API map (regenerate: `uv run python .claude/generate-index.py`). Generated 2026-07-05.
+Auto-generated API map (regenerate: `uv run python .claude/generate-index.py`). Generated 2026-07-06.
 
 Read this instead of source files when you only need signatures/structure. Read the actual source before *editing* anything listed here.
 
@@ -13,7 +13,7 @@ diveplan — dive planning and decompression calculation library.
   - @property `planning(self) -> _DivePlanningConfig`
   dunders: `__repr__, __str__`
 - const `diveconfig = _ConfigProxy()`
-`__all__ = ['Pressure', 'Gas', 'DiveSegment', 'SegmentKind', 'DiveConfig', 'diveconfig']`
+`__all__ = ['Pressure', 'Gas', 'DiveSegment', 'SegmentKind', 'DiveConfig', 'diveconfig', 'DiveProfile', 'DiveResult', 'GasPlan', 'plan_ascent']`
 
 ## `src/diveplan/core/__init__.py`
 Core value objects and configuration for diveplan.
@@ -142,7 +142,7 @@ core/pressure.py — Pressure value type.
 (empty stub)
 
 ## `src/diveplan/dive/dive_profile.py`
-`__all__ = ('DiveProfile', 'ProfileValidationError', 'ProfileContinuityError', 'ProfileSimplicityError', 'ProfileStartEndError', 'ProfileDepthContinuityError', 'ProfileGasContinuityError', 'ProfileEmptyError', 'ProfileTooShortError', 'ProfileBuilderPolicy')`
+`__all__ = ('DiveProfile', 'ProfileSample', 'ProfileValidationError', 'ProfileContinuityError', 'ProfileSimplicityError', 'ProfileStartEndError', 'ProfileDepthContinuityError', 'ProfileGasContinuityError', 'ProfileEmptyError', 'ProfileTooShortError', 'ProfileBuilderPolicy')`
 ### class `ProfileValidationError` (ValueError) — Base descriptor for a dive profile validation problem.
   - `__init__(self, message: str, *, segment_index: Optional[int] = None, segments: tuple[DiveSegment, ...] = ())`
   attrs: `fixable: bool = False`
@@ -170,6 +170,8 @@ core/pressure.py — Pressure value type.
 ### class `ProfileBuilderPolicy` (Enum) — Policies for handling validation during dive profile construction.
   attrs: `RAISE_BAD_PROFILE = auto(); ALLOW_BAD_PROFILE = auto(); AUTOFIX_BAD_PROFILE = auto()`
 - `_as_timedelta(value: timedelta | float) -> timedelta`  — Coerce a time argument: timedelta as-is, bare numbers as minutes
+### class `ProfileSample` (NamedTuple) — One integration step on the profile's global timeline.
+  attrs: `time: timedelta; dt: timedelta; pressure: Pressure; gas: Gas; segment_index: int`
 ### class `DiveProfile` — A dive profile consisting of a sequence of dive segments.
   `__slots__ = ('_segments', '_builder_policy')`
   - `__init__(self, builder_policy: ProfileBuilderPolicy = ProfileBuilderPolicy.RAISE_BAD_PROFILE)`  — Initialize a new DiveProfile.
@@ -185,7 +187,9 @@ core/pressure.py — Pressure value type.
   - `segment_at(self, t: timedelta | float) -> DiveSegment`  — The segment active at runtime `t` (minutes or timedelta).
   - `pressure_at(self, t: timedelta | float) -> Pressure`  — Ambient pressure at runtime `t` (minutes or timedelta), interpolated
   - `gas_at(self, t: timedelta | float) -> Gas`  — Breathing gas at runtime `t` (minutes or timedelta).
+  - `iter_samples(self, interval: timedelta | float) -> Iterator[ProfileSample]`  — Yield integration steps over the whole profile timeline.
   - @staticmethod `_is_gas_switch_seam(a: DiveSegment, b: DiveSegment) -> bool`  — A seam is a legitimate gas switch if either side is a GAS_SWITCH segment.
+  - @staticmethod `_is_mergeable(a: DiveSegment, b: DiveSegment) -> bool`  — Adjacent segments are redundant only if fully continuous AND of the
   - `_seam_error(self, a: DiveSegment, b: DiveSegment, index: int) -> Optional[ProfileValidationError]`  — Return the most fundamental continuity error at the seam (a → b), or None.
   - `_raise_on_seam(self, a: DiveSegment, b: DiveSegment, index: int) -> None`  — Under RAISE policy, raise the seam error (a → b) if there is one.
   - `_check_insertion(self, index: int, segment: DiveSegment) -> None`  — Under RAISE policy, validate the seam(s) a new segment at `index` would create.
@@ -230,6 +234,24 @@ core/pressure.py — Pressure value type.
 ## `src/diveplan/dive/dive_report.py`
 (empty stub)
 
+## `src/diveplan/dive/dive_result.py`
+Result layer: a deco model run over a profile, queryable by time.
+`__all__ = ['DiveResult']`
+### class `DiveResult[StateT: DecoState]` — A deco model's run over a profile: checkpoints + time queries.
+  `__slots__ = ('_profile', '_model', '_checkpoints')`
+  - `__init__(self, profile: DiveProfile, model: BaseDecoModel[StateT], checkpoints: tuple[StateT, ...])`
+  - @classmethod `run(cls, profile: DiveProfile, model: BaseDecoModel[StateT]) -> 'DiveResult[StateT]'`  — Integrate `model` over `profile` and capture boundary checkpoints.
+  - @property `profile(self) -> DiveProfile`  — The dive profile this result was computed from (own copy).
+  - @property `checkpoints(self) -> tuple[StateT, ...]`  — Model states at segment boundaries; ``[0]`` is the pre-dive state,
+  - @property `final_state(self) -> StateT`  — Model state at the end of the profile.
+  - `model_at(self, t: timedelta | float) -> BaseDecoModel[StateT]`  — Independent model instance positioned at runtime `t`.
+  - `state_at(self, t: timedelta | float) -> StateT`  — Model state at runtime `t` (minutes or timedelta).
+  - `ceiling_at(self, t: timedelta | float) -> Pressure`  — Deco ceiling at runtime `t`.
+  - `tissue_series(self, interval: timedelta | float) -> Iterator[tuple[timedelta, StateT]]`  — Yield (time, state) at each sample step — for tissue plots.
+  - `tts(self, t: timedelta | float, gas_plan: GasPlan | None = None) -> timedelta`  — Time-to-surface at runtime `t`: the duration of an ascent planned
+  - `_unique_gases(self) -> list[Gas]`
+  dunders: `__repr__`
+
 ## `src/diveplan/dive/formatters/__init__.py`
 (empty stub)
 
@@ -245,9 +267,13 @@ Decompression model base classes.
   `__slots__ = ('sample_rate_seconds',)`
   - @abstract `__init__(self) -> None`  — Initialize the decompression model.
   - `integrate_segment(self, segment: DiveSegment) -> StateT`  — Integrate a dive segment into the model and return the state after it.
+  - `get_state(self) -> StateT`  — Snapshot the current model state (public accessor).
+  - `integrate(self, pressure: Pressure, gas: Gas, dt: timedelta) -> None`  — Advance the model by a single step at the given pressure and gas.
   - @abstract `_integrate_model(self, pressure: Pressure, gas: Gas, dt: timedelta) -> None`  — Advance the model by dt at the given ambient pressure and gas.
   - @abstract `_get_deco_state(self) -> StateT`  — Snapshot the current model state.
   - @abstract `get_ceiling(self) -> Pressure`  — Return the current ceiling depth.
+  - @abstract `set_state(self, state: StateT) -> None`  — Restore the model to a previously snapshotted state (lossless).
+  - @abstract `copy(self) -> Self`  — Independent clone with identical configuration and current state.
   attrs: `NAME: ClassVar[str]`
 
 ## `src/diveplan/models/buhlmann/__init__.py`
@@ -346,13 +372,27 @@ VPM-B decompression model (Varying Permeability Model, revision B).
   dunders: `__repr__`
 
 ## `src/diveplan/planning/__init__.py`
-(empty stub)
+Ascent planning: deco schedules and gas selection.
+`__all__ = ['plan_ascent', 'GasPlan', 'AscentNotConvergingError']`
 
 ## `src/diveplan/planning/ascent_plan.py`
-(empty stub)
+Ascent planner: compute the decompression schedule from a model state.
+`__all__ = ['plan_ascent', 'AscentNotConvergingError']`
+### class `AscentNotConvergingError` (RuntimeError) — The stop loop failed to clear the next target within the iteration cap.
+- `_ceiling(model: BaseDecoModel[Any], target: Pressure, first_stop: Optional[Pressure]) -> Pressure`  — Model ceiling for an ascent-to-`target` test.
+- `_next_targets(current: Pressure) -> list[Pressure]`  — Candidate ascent targets from shallowest to deepest: the surface, then
+- `plan_ascent(model: BaseDecoModel[Any], start_pressure: Pressure, gas: Gas, gas_plan: Optional[GasPlan] = None) -> list[DiveSegment]`  — Plan the decompression ascent from the given position and model state.
 
 ## `src/diveplan/planning/gas_plan.py`
-(empty stub)
+Gas plan: the set of gases carried on a dive, and which to breathe when.
+`__all__ = ['GasPlan']`
+### class `GasPlan` — An ordered collection of carried gases with depth-based selection.
+  `__slots__ = ('_gases',)`
+  - `__init__(self, gases: Iterable[Gas])`
+  - @property `gases(self) -> tuple[Gas, ...]`  — The carried gases (duplicates removed, insertion order).
+  - @staticmethod `is_breathable(gas: Gas, pressure: Pressure) -> bool`  — Whether `gas` is within the configured deco ppO2 window here.
+  - `best_gas_at(self, pressure: Pressure) -> Optional[Gas]`  — Richest breathable gas at `pressure`, or None if none qualifies.
+  dunders: `__repr__`
 
 ## `src/diveplan/registry.py`
 ### class `PluginNotFoundError` (KeyError)
@@ -384,7 +424,9 @@ VPM-B decompression model (Varying Permeability Model, revision B).
 - `test_buhlmann.py` (44 tests) — TestGradient, TestCompartmentState, TestCompartmentIntegration, TestCompartmentToleratedPressure, TestZHL16CTables, TestZHL16CModel, MiniBuhlmann, TestBuhlmannFamily, TestZHL16CRegistry
 - `test_config.py` (45 tests) — TestSubConfigBase, TestPhysicsConfig, TestGasConfig, TestDivePlanningConfig, TestDiveConfigStructure, TestGlobalDefault, TestContextManager, TestDefaultConfigLoading, TestSerialization
 - `test_dive_profile.py` (74 tests) — TestDiveProfileBuilder, TestDiveProfileValidation, TestDiveProfileFixes, TestDiveProfileTimeline, TestDiveProfileFluentBuilders, TestDiveProfileSerialization
+- `test_dive_result.py` (20 tests) — TestIterSamples, TestDiveResultRun, TestDiveResultQueries
 - `test_dive_segment.py` (59 tests) — TestDiveSegmentConstruction, TestDiveSegmentProperties, TestDiveSegmentInterpolation, TestDiveSegmentSplitting, TestDiveSegmentMerging, TestDiveSegmentContinuity, TestDiveSegmentIteration, TestDiveSegmentMagicMethods, TestDiveSegmentImmutability, TestDiveSegmentSerialization
 - `test_gas.py` (61 tests) — TestRawConstruction, TestNamedConstructors, TestFromName, TestPartialPressures, TestMod, TestEnd, TestBestMix, TestEqualityAndHash, TestStringRepresentation
+- `test_planning.py` (15 tests) — TestGasPlan, TestPlanAscentNoDeco, TestPlanAscentDeco
 - `test_pressure.py` (70 tests) — TestConstruction, TestProperties, TestAltConstructorsAndProperties, TestStringParsing, TestImmutability, TestAddition, TestSubtraction, TestMultiplication, TestDivision, TestOrdering, TestHashing, TestDisplay
 - `test_vpm.py` (23 tests) — TestBubbleMechanics, TestVpmBModel, TestVpmBRegistry

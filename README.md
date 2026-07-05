@@ -21,9 +21,12 @@ Early development. The **core layer is implemented and tested**:
 | `Gas` — O2/He/N2 mixes, MOD/END/best-mix | ✅ |
 | `DiveSegment` / `SegmentKind` — one leg of a profile | ✅ |
 | `DiveConfig` — physics / planning / gas config, scoped overrides | ✅ |
-| `DiveProfile` — builder, validation & repair | ✅ |
+| `DiveProfile` — builder, validation & repair, timeline | ✅ |
 | Plugin registry (entry-point deco-model discovery) | ✅ |
-| Deco models (ZHL-16C), ascent planner, reports | 🚧 in progress |
+| Deco models — Bühlmann ZHL-16C (GF), VPM-B (pre-CVA) | ✅ |
+| `DiveResult` — checkpoints, `state_at`/`ceiling_at`/`tts(t)` | ✅ |
+| Ascent planner (`plan_ascent`) + `GasPlan` | ✅ |
+| VPM-B critical-volume/Boyle stage, reports, formatters | 🚧 in progress |
 
 ## Design principles
 
@@ -97,6 +100,20 @@ profile.gas_at(23)                # gas breathed at that moment
 # JSON round-trip:
 profile.to_json(path="dive.json")
 restored = DiveProfile.from_json(path="dive.json")
+```
+
+Running a deco model over the profile and querying the result:
+
+```python
+from diveplan import DiveResult
+from diveplan.models.buhlmann.common import Gradient
+from diveplan.models.buhlmann.zhl16 import ZHL16C
+
+result = DiveResult.run(profile, ZHL16C(gradient=Gradient(0.3, 0.7)))
+result.ceiling_at(23).depth_m   # deco ceiling 23 minutes into the dive
+result.tts(23)                  # time-to-surface if ascending right now
+for t, state in result.tissue_series(1):   # tissue loading, 1-min samples
+    ...
 ```
 
 Segments can still be added explicitly (`add_segment`, `insert_segment_at_index`,
