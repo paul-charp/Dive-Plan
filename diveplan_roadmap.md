@@ -403,7 +403,7 @@ Plugins register via Python entry points in their own `pyproject.toml`:
 
 ```toml
 # diveplan-vpm/pyproject.toml
-[project.entry-points."diveplan.models"]
+[project.entry-points."diveplan.deco_models"]
 vpm = "diveplan_vpm:VPMModel"
 
 [project.entry-points."diveplan.formatters"]
@@ -422,7 +422,7 @@ registry.register_model("exp", MyModel)     # manual escape hatch
 
 Built-in models and formatters self-register via `diveplan`'s own `pyproject.toml`.
 
-**Plugin groups:** `diveplan.models`, `diveplan.formatters`
+**Plugin groups:** `diveplan.deco_models`, `diveplan.formatters`
 
 ---
 
