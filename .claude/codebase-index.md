@@ -251,28 +251,57 @@ Decompression model base classes.
   attrs: `NAME: ClassVar[str]`
 
 ## `src/diveplan/models/buhlmann/__init__.py`
-(empty stub)
+Bühlmann decompression models and shared helpers.
+`__all__ = ['ZHL16C', 'ZHL16State', 'Compartment', 'Gradient']`
 
 ## `src/diveplan/models/buhlmann/common.py`
-`__all__ = ('Gradient', 'Compartment')`
-### class `Gradient` — Helper for computing gradients of dive segments.
+Shared Bühlmann machinery: gradient factors and Haldane tissue compartments.
+`__all__ = ('Gradient', 'Compartment', 'WATER_VAPOR_PRESSURE_MBAR')`
+- const `WATER_VAPOR_PRESSURE_MBAR = 62.7`
+### class `Gradient` — A gradient-factor pair (Baker GF low/high), as fractions.
   `__slots__ = ('gf_low', 'gf_high')`
   - `__init__(self, gf_low: float, gf_high: float)`
-  - `factor(self, depth_pressure: Pressure, max_depth_pressure: Pressure) -> float`  — Linearly interpolate the gradient for a given depth.
+  - `factor(self, pressure: Pressure, first_stop_pressure: Pressure) -> float`  — Gradient factor applicable at ``pressure``.
   attrs: `gf_low: float; gf_high: float`
   dunders: `__eq__, __hash__, __repr__, __str__`
-### class `Compartment` — Helper for tracking compartment constants and saturation.
-  `__slots__ = ('ppn2', 'pphe', 'ht_n2', 'ht_he', 'a_n2', 'a_he', 'b_n2', 'b_he', 'tolerated_pressure')`
+### class `Compartment` — One Haldane tissue compartment with Bühlmann a/b coefficients.
+  `__slots__ = ('ht_n2', 'ht_he', 'a_n2', 'a_he', 'b_n2', 'b_he', '_ppn2_mbar', '_pphe_mbar')`
   - `__init__(self, *, ht_n2: float, ht_he: float, a_n2: float, a_he: float, b_n2: float, b_he: float, ppn2: Optional[Pressure] = None, pphe: Optional[Pressure] = None)`
-  - `update_compartment(self, pressure: Pressure, gas: Gas, duration: timedelta, gradient_factor: float)`
-  - `_integrate_compartment(self, pressure: Pressure, gas: Gas, duration: timedelta)`
-  - `_update_compartment_max_tolerated_pressure(self, ambiant_pressure: Pressure, gradient_factor: float)`
-  - @staticmethod `_calc_inert_gas_pressure(ambiant_pressure: Pressure, inspired_gas_pressure: Pressure, time_minutes: float, half_time_minutes: float) -> Pressure`
-  - @staticmethod `_calcInertGasLimit(ppn2: Pressure, pphe: Pressure, a_n2: float, b_n2: float, a_he: float, b_he: float, ambiant_pressure: Pressure, gradient_factor: float) -> Pressure`
-  - `is_eq_pressures_only(self, other: Compartment) -> bool`
-  - `is_eq_with_pressures(self, other: Compartment) -> bool`
-  attrs: `ppn2: Pressure; pphe: Pressure; ht_n2: float; ht_he: float; a_n2: float; a_he: float; b_n2: float; b_he: float`
+  - @property `ppn2(self) -> Pressure`  — Current N2 tension (rounded to integer mbar for display/compare).
+  - @property `pphe(self) -> Pressure`  — Current He tension (rounded to integer mbar for display/compare).
+  - @property `tensions_mbar(self) -> tuple[float, float]`  — Exact (ppn2, pphe) tensions in float mbar — for state snapshots.
+  - `set_tensions_mbar(self, ppn2_mbar: float, pphe_mbar: float) -> None`  — Restore exact tensions from a state snapshot.
+  - `copy(self) -> 'Compartment'`  — Independent copy with the same constants and current tensions.
+  - `integrate(self, pressure: Pressure, gas: Gas, duration: timedelta) -> None`  — Haldane exponential update toward the alveolar inert pressures.
+  - `tolerated_ambient_pressure(self, gradient_factor: float = 1.0) -> Pressure`  — Minimum ambient pressure this compartment tolerates (Baker formula).
+  attrs: `ht_n2: float; ht_he: float; a_n2: float; a_he: float; b_n2: float; b_he: float`
   dunders: `__eq__, __hash__, __repr__, __str__`
+
+## `src/diveplan/models/buhlmann/zhl16.py`
+Bühlmann ZHL-16C decompression model.
+`__all__ = ['ZHL16C', 'ZHL16State']`
+- const `N2_HALF_TIMES = (5.0, 8.0, 12.5, 18.5, 27.0, 38.3, 54.3, 77.0, 109.0, 146.0, 187.0, 239.0, 305.0, 390.0, 498.0, 635.0)`
+- const `N2_A = (1.1696, 1.0, 0.8618, 0.7562, 0.62, 0.5043, 0.441, 0.4, 0.375, 0.35, 0.3295, 0.3065, 0.2835, 0.261, 0.248, 0.2327)`
+- const `N2_B = (0.5578, 0.6514, 0.7222, 0.7825, 0.8126, 0.8434, 0.8693, 0.891, 0.9092, 0.9222, 0.9319, 0.9403, 0.9477, 0.9544, 0.9602, 0.9653)`
+- const `HE_HALF_TIMES = (1.88, 3.02, 4.72, 6.99, 10.21, 14.48, 20.53, 29.11, 41.2, 55.19, 70.69, 90.34, 115.29, 147.42, 188.24, 240.03)`
+- const `HE_A = (1.6189, 1.383, 1.1919, 1.0458, 0.922, 0.8205, 0.7305, 0.6502, 0.595, 0.5545, 0.5333, 0.5189, 0.5181, 0.5176, 0.5172, 0.5119)`
+- const `HE_B = (0.477, 0.5747, 0.6527, 0.7223, 0.7582, 0.7957, 0.8279, 0.8553, 0.8757, 0.8903, 0.8997, 0.9073, 0.9122, 0.9171, 0.9217, 0.9267)`
+- const `COMPARTMENT_COUNT = 16`
+### class `ZHL16State` (DecoState) — Frozen snapshot of the 16 (ppn2, pphe) tissue tensions in float mbar.
+  `__slots__ = ('tissues',)`
+  - `__init__(self, tissues: tuple[tuple[float, float], ...])`
+  attrs: `tissues: tuple[tuple[float, float], ...]`
+  dunders: `__delattr__, __eq__, __hash__, __repr__, __setattr__`
+### class `ZHL16C` (BaseDecoModel[ZHL16State]) — Bühlmann ZHL-16C with Baker gradient factors.
+  `__slots__ = ('gradient', '_compartments')`
+  - `__init__(self, gradient: Gradient | None = None)`
+  - `_integrate_model(self, pressure: Pressure, gas: Gas, dt: timedelta) -> None`
+  - `_get_deco_state(self) -> ZHL16State`
+  - `get_ceiling(self, gradient_factor: float | None = None) -> Pressure`  — Minimum tolerated ambient pressure across all compartments.
+  - `set_state(self, state: ZHL16State) -> None`  — Restore tissue tensions from a snapshot (exact, lossless).
+  - `copy(self) -> 'ZHL16C'`  — Independent clone with the same gradient and tissue tensions —
+  attrs: `NAME = 'zhl16c'; gradient: Gradient`
+  dunders: `__repr__`
 
 ## `src/diveplan/planning/__init__.py`
 (empty stub)
@@ -310,6 +339,7 @@ Decompression model base classes.
 
 # Tests (tests/)
 - `conftest.py` (0 tests)
+- `test_buhlmann.py` (38 tests) — TestGradient, TestCompartmentState, TestCompartmentIntegration, TestCompartmentToleratedPressure, TestZHL16CTables, TestZHL16CModel, TestZHL16CRegistry
 - `test_config.py` (45 tests) — TestSubConfigBase, TestPhysicsConfig, TestGasConfig, TestDivePlanningConfig, TestDiveConfigStructure, TestGlobalDefault, TestContextManager, TestDefaultConfigLoading, TestSerialization
 - `test_dive_profile.py` (74 tests) — TestDiveProfileBuilder, TestDiveProfileValidation, TestDiveProfileFixes, TestDiveProfileTimeline, TestDiveProfileFluentBuilders, TestDiveProfileSerialization
 - `test_dive_segment.py` (59 tests) — TestDiveSegmentConstruction, TestDiveSegmentProperties, TestDiveSegmentInterpolation, TestDiveSegmentSplitting, TestDiveSegmentMerging, TestDiveSegmentContinuity, TestDiveSegmentIteration, TestDiveSegmentMagicMethods, TestDiveSegmentImmutability, TestDiveSegmentSerialization

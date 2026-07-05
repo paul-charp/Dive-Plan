@@ -24,10 +24,9 @@ dev = ["pytest", "pytest-cov", "ruff", "mypy"]
 # in the group, so an entry must only be registered once its module exists —
 # a dangling reference would break all model lookups.
 #
-# Uncomment when diveplan/models/buhlmann/zhl16.py lands:
-# [project.entry-points."diveplan.deco_models"]
-# zhl16c = "diveplan.models.buhlmann.zhl16:ZHL16C"
-#
+[project.entry-points."diveplan.deco_models"]
+zhl16c = "diveplan.models.buhlmann.zhl16:ZHL16C"
+
 # Uncomment when the formatter modules land:
 # [project.entry-points."diveplan.formatters"]
 # json = "diveplan.dive.formatters.json:JSONFormatter"
