@@ -361,9 +361,7 @@ class DiveConfig(BaseModel):
     def __exit__(self, *_: object) -> None:
         stack = DiveConfig._stack.get()
         DiveConfig._stack.set(stack[:-1])
-        logger.debug(
-            "diveplan: config context exited (stack depth %d)", len(stack) - 1
-        )
+        logger.debug("diveplan: config context exited (stack depth %d)", len(stack) - 1)
 
     # -------------------------------------------------------------------
     # Serialization

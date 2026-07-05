@@ -143,13 +143,17 @@ class TestFromName:
     def test_oxygen(self):
         assert Gas.from_name("oxygen") == Gas.oxygen()
 
-    @pytest.mark.parametrize("name", ["nx32", "ean32", "nitrox32", "nitrox 32", "EAN32", "NX32"])
+    @pytest.mark.parametrize(
+        "name", ["nx32", "ean32", "nitrox32", "nitrox 32", "EAN32", "NX32"]
+    )
     def test_nitrox_variants(self, name):
         g = Gas.from_name(name)
         assert approx(g.fo2, 0.32)
         assert approx(g.fhe, 0.0)
 
-    @pytest.mark.parametrize("name", ["tx21/35", "trimix21/35", "trimix 21/35", "TX21/35"])
+    @pytest.mark.parametrize(
+        "name", ["tx21/35", "trimix21/35", "trimix 21/35", "TX21/35"]
+    )
     def test_trimix_variants(self, name):
         g = Gas.from_name(name)
         assert approx(g.fo2, 0.21)
