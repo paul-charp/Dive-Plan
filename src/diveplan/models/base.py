@@ -10,7 +10,7 @@ what counterfactual queries (TTS at time t) resume from.
 
 from abc import ABC, abstractmethod
 from datetime import timedelta
-from typing import ClassVar
+from typing import ClassVar, Self
 
 from diveplan.core.dive_segment import DiveSegment
 from diveplan.core.gas import Gas
@@ -65,6 +65,19 @@ class BaseDecoModel[StateT: DecoState](ABC):
 
         return self._get_deco_state()
 
+    def get_state(self) -> StateT:
+        """Snapshot the current model state (public accessor)."""
+        return self._get_deco_state()
+
+    def integrate(self, pressure: Pressure, gas: Gas, dt: timedelta) -> None:
+        """Advance the model by a single step at the given pressure and gas.
+
+        Public stepwise entry point for consumers that drive their own sample
+        loop (result layer, planner); ``integrate_segment`` remains the
+        segment-level API.
+        """
+        self._integrate_model(pressure, gas, dt)
+
     @abstractmethod
     def _integrate_model(self, pressure: Pressure, gas: Gas, dt: timedelta) -> None:
         """Advance the model by dt at the given ambient pressure and gas."""
@@ -76,3 +89,16 @@ class BaseDecoModel[StateT: DecoState](ABC):
     @abstractmethod
     def get_ceiling(self) -> Pressure:
         """Return the current ceiling depth."""
+
+    @abstractmethod
+    def set_state(self, state: StateT) -> None:
+        """Restore the model to a previously snapshotted state (lossless).
+
+        Together with :meth:`copy`, this is the checkpointing contract the
+        result layer relies on for state-at-time and counterfactual (TTS)
+        queries.
+        """
+
+    @abstractmethod
+    def copy(self) -> Self:
+        """Independent clone with identical configuration and current state."""
