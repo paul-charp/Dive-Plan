@@ -22,17 +22,11 @@ from diveplan.models.buhlmann.common import (
     Compartment,
     Gradient,
 )
-from diveplan.models.buhlmann.zhl16 import (
-    COMPARTMENT_COUNT,
-    HE_HALF_TIMES,
-    N2_A,
-    N2_B,
-    N2_HALF_TIMES,
-    ZHL16C,
-    ZHL16State,
-)
+from diveplan.models.buhlmann.model import BuhlmannModel, BuhlmannState
+from diveplan.models.buhlmann.zhl16 import ZHL16C
 
 AIR = Gas.air()
+COMPARTMENT_COUNT = 16
 
 
 def surface_equilibrium_n2_mbar() -> float:
@@ -220,15 +214,21 @@ class TestCompartmentToleratedPressure:
 
 class TestZHL16CTables:
     def test_table_shapes(self):
-        for table in (N2_HALF_TIMES, N2_A, N2_B, HE_HALF_TIMES):
+        for table in (
+            ZHL16C.N2_HALF_TIMES,
+            ZHL16C.N2_A,
+            ZHL16C.N2_B,
+            ZHL16C.HE_HALF_TIMES,
+        ):
             assert len(table) == COMPARTMENT_COUNT
+        assert ZHL16C().compartment_count == COMPARTMENT_COUNT
 
     def test_half_times_monotonic(self):
-        assert list(N2_HALF_TIMES) == sorted(N2_HALF_TIMES)
-        assert list(HE_HALF_TIMES) == sorted(HE_HALF_TIMES)
+        assert list(ZHL16C.N2_HALF_TIMES) == sorted(ZHL16C.N2_HALF_TIMES)
+        assert list(ZHL16C.HE_HALF_TIMES) == sorted(ZHL16C.HE_HALF_TIMES)
 
     def test_b_coefficients_bounded(self):
-        assert all(0 < b < 1 for b in N2_B)
+        assert all(0 < b < 1 for b in ZHL16C.N2_B)
 
 
 class TestZHL16CModel:
@@ -271,7 +271,7 @@ class TestZHL16CModel:
         state = model.integrate_segment(
             DiveSegment(Pressure.from_depth_m(20), Pressure.from_depth_m(20), 5, AIR)
         )
-        assert isinstance(state, ZHL16State)
+        assert isinstance(state, BuhlmannState)
         assert len(state.tissues) == COMPARTMENT_COUNT
 
     def test_fast_compartment_leads_on_short_exposure(self):
@@ -309,9 +309,71 @@ class TestZHL16CModel:
         with pytest.raises(AttributeError, match="immutable"):
             state.tissues = ()
 
-    def test_state_length_validation(self):
-        with pytest.raises(ValueError, match="16 tissue"):
-            ZHL16State(((750.0, 0.0),))
+    def test_empty_state_rejected(self):
+        with pytest.raises(ValueError, match="at least one"):
+            BuhlmannState(())
+
+    def test_set_state_length_mismatch_rejected(self):
+        with pytest.raises(ValueError, match="1 compartments.*16"):
+            ZHL16C().set_state(BuhlmannState(((750.0, 0.0),)))
+
+
+# ------------------------------------------------------------------
+# Bühlmann family (engine/table separation)
+# ------------------------------------------------------------------
+
+
+class MiniBuhlmann(BuhlmannModel):
+    """Two-compartment toy variant — proves models are table-only subclasses."""
+
+    NAME = "mini"
+    N2_HALF_TIMES = (5.0, 635.0)
+    N2_A = (1.1696, 0.2327)
+    N2_B = (0.5578, 0.9653)
+    HE_HALF_TIMES = (1.88, 240.03)
+    HE_A = (1.6189, 0.5119)
+    HE_B = (0.4770, 0.9267)
+
+    __slots__ = ()
+
+
+class TestBuhlmannFamily:
+    def test_engine_is_abstract(self):
+        with pytest.raises(TypeError, match="abstract engine"):
+            BuhlmannModel()
+
+    def test_variant_is_table_only(self):
+        model = MiniBuhlmann()
+        assert model.compartment_count == 2
+        state = model.integrate_segment(
+            DiveSegment(Pressure.from_depth_m(30), Pressure.from_depth_m(30), 10, AIR)
+        )
+        assert len(state.tissues) == 2
+        assert model.get_ceiling() < Pressure.surface()
+
+    def test_mismatched_tables_rejected_at_class_definition(self):
+        with pytest.raises(TypeError, match="mismatched lengths"):
+
+            class Broken(BuhlmannModel):
+                NAME = "broken"
+                N2_HALF_TIMES = (5.0, 8.0)
+                N2_A = (1.1696,)  # wrong length
+                N2_B = (0.5578, 0.6514)
+                HE_HALF_TIMES = (1.88, 3.02)
+                HE_A = (1.6189, 1.3830)
+                HE_B = (0.4770, 0.5747)
+
+    def test_partial_tables_rejected_at_class_definition(self):
+        with pytest.raises(TypeError, match="missing"):
+
+            class Incomplete(BuhlmannModel):
+                NAME = "incomplete"
+                N2_HALF_TIMES = (5.0,)
+
+    def test_copy_preserves_subclass(self):
+        clone = MiniBuhlmann(gradient=Gradient(0.4, 0.9)).copy()
+        assert type(clone) is MiniBuhlmann
+        assert clone.gradient == Gradient(0.4, 0.9)
 
 
 class TestZHL16CRegistry:
