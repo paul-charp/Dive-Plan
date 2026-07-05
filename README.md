@@ -74,24 +74,38 @@ with fresh:
     Pressure.from_depth_m(30).bar     # uses fresh-water density
 ```
 
-Building a profile:
+Building a profile — fluent style, with depths as `"40 m"` strings and gases
+by name:
 
 ```python
-from diveplan import DiveSegment, Gas, Pressure
 from diveplan.dive.dive_profile import DiveProfile
 
-profile = DiveProfile()
-profile.add_segment(
-    DiveSegment(Pressure.surface(), Pressure.from_depth_m(40), 4, Gas.air())
-)
-profile.add_segment(
-    DiveSegment(Pressure.from_depth_m(40), Pressure.from_depth_m(40), 20, Gas.air())
+profile = (
+    DiveProfile()
+    .descend_to("40 m")        # air by default, configured descent rate
+    .stay(20)                  # 20 min bottom time
+    .ascend_to("21 m")
+    .switch_gas("ean50")       # gas switch at the configured switch time
+    .surface()                 # ascend to the surface
 )
 
-# Validate and auto-repair (insert transitions, gas switches, surface segments).
+# Address the profile by runtime:
+profile.runtime                # total timedelta
+profile.pressure_at(23).depth_m   # depth 23 minutes into the dive
+profile.gas_at(23)                # gas breathed at that moment
+
+# JSON round-trip:
+profile.to_json(path="dive.json")
+restored = DiveProfile.from_json(path="dive.json")
+```
+
+Segments can still be added explicitly (`add_segment`, `insert_segment_at_index`,
+…) and repaired after the fact:
+
+```python
 for error in profile.validate_profile(skip_start_end_segments=False):
     print(error.message)
-profile.fix_all()
+profile.fix_all()   # insert transitions, gas switches, surface segments
 ```
 
 ## Configuration
