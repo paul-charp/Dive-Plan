@@ -304,6 +304,47 @@ Bühlmann ZHL-16 variants — coefficient tables over the shared engine.
   `__slots__ = ()`
   attrs: `NAME = 'zhl16c'; N2_HALF_TIMES = (5.0, 8.0, 12.5, 18.5, 27.0, 38.3, 54.3, 77.0, 109.0, 146.0, 187.0, 239.0, 305.0, 390.0, 498.0, 635.0); N2_A = (1.1696, 1.0, 0.8618, 0.7562, 0.62, 0.5043, 0.441, 0.4, 0.375, 0.35, 0.3295, 0.3065, 0.2835, 0.261, 0.248, 0.2327); N2_B = (0.5578, 0.6514, 0.7222, 0.7825, 0.8126, 0.8434, 0.8693, 0.891, 0.9092, 0.9222, 0.9319, 0.9403, 0.9477, 0.9544, 0.9602, 0.9653); HE_HALF_TIMES = (1.88, 3.02, 4.72, 6.99, 10.21, 14.48, 20.53, 29.11, 41.2, 55.19, 70.69, 90.34, 115.29, 147.42, 188.24, 240.03); HE_A = (1.6189, 1.383, 1.1919, 1.0458, 0.922, 0.8205, 0.7305, 0.6502, 0.595, 0.5545, 0.5333, 0.5189, 0.5181, 0.5176, 0.5172, 0.5119); HE_B = (0.477, 0.5747, 0.6527, 0.7223, 0.7582, 0.7957, 0.8279, 0.8553, 0.8757, 0.8903, 0.8997, 0.9073, 0.9122, 0.9171, 0.9217, 0.9267)`
 
+## `src/diveplan/models/vpm/__init__.py`
+VPM-family (bubble) decompression models.
+`__all__ = ['VpmB', 'VpmState']`
+
+## `src/diveplan/models/vpm/model.py`
+VPM-B decompression model (Varying Permeability Model, revision B).
+`__all__ = ['VpmB', 'VpmState']`
+- const `SURFACE_TENSION_GAMMA = 0.18137175`
+- const `SKIN_COMPRESSION_GAMMA_C = 2.6040525`
+- const `CRIT_RADIUS_N2_UM = 0.55`
+- const `CRIT_RADIUS_HE_UM = 0.45`
+- const `GRADIENT_OF_IMPERMEABILITY_BAR = 8.30865`
+- const `REGENERATION_TIME_MIN = 20160.0`
+- const `OTHER_GASES_PRESSURE_BAR = 0.1359888`
+- const `CRIT_VOLUME_LAMBDA_BAR_MIN = 199.58`
+- const `CONSERVATISM_RADIUS_SCALE = (1.0, 1.05, 1.12, 1.22, 1.35)`
+- `allowable_gradient_bar(radius_um: float) -> float`  — Initial allowable supersaturation gradient for a nucleus of `radius_um`.
+- `crushed_radius_um(max_crushing_bar: float, initial_radius_um: float) -> float`  — Nucleus radius after being crushed by `max_crushing_bar`.
+- `regenerated_radius_um(crushed_um: float, initial_radius_um: float, elapsed_min: float) -> float`  — Crushed nucleus regrowing toward its initial radius (τ = 2 weeks).
+- `impermeable_crushing_bar(ambient_bar: float, onset_tension_bar: float, initial_radius_um: float) -> float`  — Crushing pressure in the impermeable regime (gradient > 8.30865 bar).
+### class `VpmState` (DecoState) — Frozen VPM-B snapshot.
+  `__slots__ = ('compartments', 'runtime_min')`
+  - `__init__(self, compartments: tuple[tuple[float, float, float, float, float], ...], runtime_min: float)`
+  attrs: `compartments: tuple[tuple[float, float, float, float, float], ...]; runtime_min: float`
+  dunders: `__delattr__, __eq__, __hash__, __repr__, __setattr__`
+### class `VpmB` (BaseDecoModel[VpmState]) — VPM-B core model (pre-CVA ceilings; see module docstring for scope).
+  `__slots__ = ('conservatism', '_compartments', '_max_crush_n2_bar', '_max_crush_he_bar', '_onset_tension_bar', '_runtime_min')`
+  - `__init__(self, conservatism: int = 0)`
+  - @property `crit_radius_n2_um(self) -> float`  — Initial N2 critical radius after conservatism scaling.
+  - @property `crit_radius_he_um(self) -> float`  — Initial He critical radius after conservatism scaling.
+  - @staticmethod `_total_tension_bar(compartment: Compartment) -> float`
+  - `_update_crushing(self, ambient_bar: float, index: int) -> None`  — Track the maximum crushing pressure seen by compartment `index`.
+  - `_allowable_gradients_bar(self, index: int) -> tuple[float, float]`  — Current (N2, He) allowable gradients for compartment `index` —
+  - `_integrate_model(self, pressure: Pressure, gas: Gas, dt: timedelta) -> None`
+  - `_get_deco_state(self) -> VpmState`
+  - `get_ceiling(self) -> Pressure`  — Minimum tolerated ambient pressure across compartments (pre-CVA).
+  - `set_state(self, state: VpmState) -> None`  — Restore tissue tensions and bubble bookkeeping from a snapshot.
+  - `copy(self) -> Self`  — Independent clone (same conservatism, tensions, crushing history).
+  attrs: `NAME = 'vpmb'; COMPARTMENT_COUNT: ClassVar[int] = len(ZHL16C.N2_HALF_TIMES); conservatism: int`
+  dunders: `__repr__`
+
 ## `src/diveplan/planning/__init__.py`
 (empty stub)
 
@@ -346,3 +387,4 @@ Bühlmann ZHL-16 variants — coefficient tables over the shared engine.
 - `test_dive_segment.py` (59 tests) — TestDiveSegmentConstruction, TestDiveSegmentProperties, TestDiveSegmentInterpolation, TestDiveSegmentSplitting, TestDiveSegmentMerging, TestDiveSegmentContinuity, TestDiveSegmentIteration, TestDiveSegmentMagicMethods, TestDiveSegmentImmutability, TestDiveSegmentSerialization
 - `test_gas.py` (61 tests) — TestRawConstruction, TestNamedConstructors, TestFromName, TestPartialPressures, TestMod, TestEnd, TestBestMix, TestEqualityAndHash, TestStringRepresentation
 - `test_pressure.py` (70 tests) — TestConstruction, TestProperties, TestAltConstructorsAndProperties, TestStringParsing, TestImmutability, TestAddition, TestSubtraction, TestMultiplication, TestDivision, TestOrdering, TestHashing, TestDisplay
+- `test_vpm.py` (23 tests) — TestBubbleMechanics, TestVpmBModel, TestVpmBRegistry

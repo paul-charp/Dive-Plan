@@ -26,6 +26,7 @@ dev = ["pytest", "pytest-cov", "ruff", "mypy"]
 #
 [project.entry-points."diveplan.deco_models"]
 zhl16c = "diveplan.models.buhlmann.zhl16:ZHL16C"
+vpmb = "diveplan.models.vpm.model:VpmB"
 
 # Uncomment when the formatter modules land:
 # [project.entry-points."diveplan.formatters"]
