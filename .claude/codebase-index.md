@@ -1,6 +1,6 @@
 # diveplan codebase index
 
-Auto-generated API map (regenerate: `uv run python .claude/generate-index.py`). Generated 2026-07-05.
+Auto-generated API map (regenerate: `uv run python .claude/generate-index.py`). Generated 2026-07-06.
 
 Read this instead of source files when you only need signatures/structure. Read the actual source before *editing* anything listed here.
 
@@ -8,12 +8,12 @@ Read this instead of source files when you only need signatures/structure. Read 
 diveplan — dive planning and decompression calculation library.
 ### class `_ConfigProxy` — Transparent proxy to DiveConfig.current().
   `__slots__ = ()`
-  - @property `gas(self) -> _GasConfig`
-  - @property `physics(self) -> _PhysicsConfig`
-  - @property `planning(self) -> _DivePlanningConfig`
+  - @property `gas(self) -> _GasConfig`  — Gas limits and SAC rates of the active config.
+  - @property `physics(self) -> _PhysicsConfig`  — Physical environment of the active config.
+  - @property `planning(self) -> _DivePlanningConfig`  — Rates and stop parameters of the active config.
   dunders: `__repr__, __str__`
 - const `diveconfig = _ConfigProxy()`
-`__all__ = ['Pressure', 'Gas', 'DiveSegment', 'SegmentKind', 'DiveConfig', 'diveconfig']`
+`__all__ = ['Pressure', 'Gas', 'DiveSegment', 'SegmentKind', 'DiveConfig', 'diveconfig', 'Dive', 'DiveProfile', 'DiveReport', 'GasPlan', 'plan_ascent']`
 
 ## `src/diveplan/core/__init__.py`
 Core value objects and configuration for diveplan.
@@ -31,7 +31,7 @@ diveplan.core.config
 ### class `_DivePlanningConfig` (_SubConfig) — Ascent/descent rates and stop parameters.
   attrs: `ascent_rate: float = Field(default=9.0, gt=0, description='m/min'); descent_rate: float = Field(default=20.0, gt=0, description='m/min'); stop_increment_m: float = Field(default=3.0, gt=0, description='meters between deco stops'); last_stop_m: float = Field(default=3.0, gt=0, description='depth of last deco stop in meters'); min_stop_time_s: int = Field(default=60, gt=0, description='minimum time at each stop in seconds'); sample_rate_s: int = Field(default=1, gt=0, description='integration sample rate in seconds'); default_model: str = Field(default='zhl16c', description='registry name of default deco model')`
 ### class `_GasConfig` (_SubConfig) — Gas planning limits and SAC rates.
-  attrs: `min_ppo2_bar: float = Field(default=0.18, gt=0, description='bar — hypoxia floor'); max_ppo2_bar: float = Field(default=1.4, gt=0, description='bar — working/bottom ppO2 limit'); deco_ppo2_bar: float = Field(default=1.6, gt=0, description='bar — ppO2 limit at deco stops'); max_ppn2_bar: float = Field(default=3.2, gt=0, description='bar — narcosis/ppN2 ceiling'); max_end_m: float = Field(default=30.0, gt=0, description='meters — maximum equivalent narcotic depth'); sac_bottom: float = Field(default=20.0, gt=0, description='L/min — surface air consumption at bottom'); sac_deco: float = Field(default=15.0, gt=0, description='L/min — surface air consumption at deco stops'); gas_switch_minutes: float = Field(default=1.0, ge=0, description='minutes added per gas switch — 0 = instant'); gas_switch_at_stops_only: bool = Field(default=True, description='if True, gas switches only allowed at deco stops')`
+  attrs: `min_ppo2_bar: float = Field(default=0.18, gt=0, description='bar — hypoxia floor'); max_ppo2_bar: float = Field(default=1.4, gt=0, description='bar — working/bottom ppO2 limit'); deco_ppo2_bar: float = Field(default=1.6, gt=0, description='bar — ppO2 limit at deco stops'); max_ppn2_bar: float = Field(default=3.2, gt=0, description='bar — narcosis/ppN2 ceiling'); max_end_m: float = Field(default=30.0, gt=0, description='meters — maximum equivalent narcotic depth'); sac_bottom: float = Field(default=20.0, gt=0, description='L/min — surface air consumption at bottom'); sac_deco: float = Field(default=15.0, gt=0, description='L/min — surface air consumption at deco stops'); sac_factor: float = Field(default=2.0, gt=0, description='stress multiplier on SAC for rock-bottom/emergency planning'); problem_solving_minutes: float = Field(default=1.0, ge=0, description='minutes spent solving a problem at depth (rock bottom)'); gas_switch_minutes: float = Field(default=1.0, ge=0, description='minutes added per gas switch — 0 = instant'); gas_switch_at_stops_only: bool = Field(default=True, description='if True, gas switches only allowed at deco stops')`
 - `_try_load(path: Path | str, source: str, config_cls: type[DiveConfig]) -> DiveConfig | None`  — Attempt to load a DiveConfig from a file. Returns None on any failure.
 - `_load_default_config() -> DiveConfig`  — Resolve the startup default config following the priority chain:
 ### class `DiveConfig` (BaseModel) — Root configuration object.
@@ -46,17 +46,18 @@ diveplan.core.config
   dunders: `__repr__, __str__`
 
 ## `src/diveplan/core/dive_segment.py`
+Dive segment: one leg of a dive profile.
 `__all__ = ['SegmentKind', 'DiveSegment']`
-### class `SegmentKind` — Kind of dive segment, used for categorization and special handling in algorithms.
-  - class `Descent` (Enum)
+### class `SegmentKind` — Namespace of segment-kind enums, grouped by direction of travel.
+  - class `Descent` (Enum) — Downward traverses (start pressure below end pressure).
     attrs: `DESCENT = auto()`
-  - class `Ascent` (Enum)
+  - class `Ascent` (Enum) — Upward traverses: planned deco legs vs. forced (direct) ascents.
     attrs: `FORCED_ASCENT = auto(); DECO_ASCENT = auto()`
-  - class `Constant` (Enum)
+  - class `Constant` (Enum) — Constant-depth segments: bottom time, deco stops, gas switches.
     attrs: `BOTTOM = auto(); STOP = auto(); GAS_SWITCH = auto()`
   - @staticmethod `from_name(name: str) -> SegmentKind.Members`  — Look up a segment kind by member name, e.g. ``"DESCENT"``, ``"STOP"``.
   attrs: `DESCENT = Descent.DESCENT; ASCENT = Ascent.FORCED_ASCENT; CONSTANT = Constant.BOTTOM; Members = Descent | Ascent | Constant`
-### class `DiveSegment` — A segment of a dive profile with a start and end pressure, duration, and gas.
+### class `DiveSegment` — One leg of a dive profile: pressures, duration, gas, and kind.
   `__slots__ = ('start_pressure', 'end_pressure', 'duration', 'gas', 'kind')`
   - `__init__(self, start_pressure: Pressure, end_pressure: Pressure, duration: timedelta | int | float, gas: Gas, *, ascent_kind: SegmentKind.Ascent = SegmentKind.ASCENT, constant_kind: SegmentKind.Constant = SegmentKind.CONSTANT)`  — Args:
   - `_determine_kind(self, ascent_kind: SegmentKind.Ascent, constant_kind: SegmentKind.Constant) -> SegmentKind.Members`
@@ -133,7 +134,7 @@ core/pressure.py — Pressure value type.
   - @property `depth_ft(self) -> float`  — Depth in feet in the context of the current DiveConfig environment.
   - @property `atm(self) -> float`  — Absolute pressure in atmospheres, relative to the current surface pressure.
   - @property `psi(self) -> float`  — Absolute pressure in pounds per square inch.
-  - @property `is_surface(self) -> bool`
+  - @property `is_surface(self) -> bool`  — Whether this pressure is at (or above) the configured surface.
   - `to_str(self, unit: PressureUnit = 'bar') -> str`  — Format pressure as a string in the specified unit.
   attrs: `_PSI_PER_MBAR = 0.0145038`
   dunders: `__add__, __delattr__, __eq__, __ge__, __gt__, __hash__, __le__, __lt__, __mul__, __repr__, __rmul__, __setattr__, __str__, __sub__, __truediv__, __truediv__, __truediv__`
@@ -141,10 +142,40 @@ core/pressure.py — Pressure value type.
 ## `src/diveplan/dive/__init__.py`
 (empty stub)
 
+## `src/diveplan/dive/dive.py`
+Dive: a deco model run over a profile, queryable and extendable.
+`__all__ = ['Dive', 'TtsVariations']`
+### class `TtsVariations` (NamedTuple) — Sensitivity of the time-to-surface to small plan changes — the
+  attrs: `per_meter: timedelta; per_minute: timedelta`
+### class `Dive[StateT: DecoState]` — A deco model's run over a profile — complete or still in progress.
+  `__slots__ = ('_profile', '_model', '_checkpoints')`
+  - `__init__(self, profile: DiveProfile, model: BaseDecoModel[StateT], checkpoints: tuple[StateT, ...])`
+  - @classmethod `run(cls, profile: DiveProfile, model: BaseDecoModel[StateT]) -> 'Dive[StateT]'`  — Integrate `model` over `profile` and capture boundary checkpoints.
+  - @property `profile(self) -> DiveProfile`  — The dive profile this dive was computed from (own copy).
+  - @property `checkpoints(self) -> tuple[StateT, ...]`  — Model states at segment boundaries; ``[0]`` is the pre-dive state,
+  - @property `final_state(self) -> StateT`  — Model state at the end of the profile.
+  - `model_at(self, t: timedelta | float) -> BaseDecoModel[StateT]`  — Independent model instance positioned at runtime `t`.
+  - `state_at(self, t: timedelta | float) -> StateT`  — Model state at runtime `t` (minutes or timedelta).
+  - `ceiling_at(self, t: timedelta | float) -> Pressure`  — Deco ceiling at runtime `t`.
+  - `cns_at(self, t: timedelta | float) -> float`  — CNS oxygen-toxicity clock accumulated by runtime `t`, in percent.
+  - `otu_at(self, t: timedelta | float) -> float`  — Pulmonary oxygen-toxicity units (REPEX) accumulated by runtime `t`.
+  - `_segments_until(self, t: timedelta | float) -> list[DiveSegment]`  — The profile's segments up to `t`, the last one truncated exactly.
+  - `tissue_series(self, interval: timedelta | float) -> Iterator[tuple[timedelta, StateT]]`  — Yield (time, state) at each sample step — for tissue plots.
+  - `tts(self, t: timedelta | float, gas_plan: GasPlan | None = None) -> timedelta`  — Time-to-surface at runtime `t`: the duration of an ascent planned
+  - `plan_ascent(self, gas_plan: GasPlan | None = None) -> list[DiveSegment]`  — Deco schedule from the dive's current end to the surface.
+  - `extend(self, segments: list[DiveSegment]) -> 'Dive[StateT]'`  — New Dive with `segments` appended and integrated.
+  - `with_ascent(self, gas_plan: GasPlan | None = None) -> 'Dive[StateT]'`  — New Dive completed with its planned deco ascent —
+  - `tts_variations(self, gas_plan: GasPlan | None = None) -> TtsVariations`  — Extra time-to-surface per +1 m on the final segment and per +1 min
+  - `_unique_gases(self) -> list[Gas]`
+  - @property `model_name(self) -> str`  — Registry name of the model this result was computed with.
+  dunders: `__repr__`
+- `_ascent_duration(model: BaseDecoModel[Any], start_pressure: Pressure, gas: Gas, gas_plan: GasPlan, clock_offset: timedelta) -> timedelta`
+
 ## `src/diveplan/dive/dive_profile.py`
-`__all__ = ('DiveProfile', 'ProfileValidationError', 'ProfileContinuityError', 'ProfileSimplicityError', 'ProfileStartEndError', 'ProfileDepthContinuityError', 'ProfileGasContinuityError', 'ProfileEmptyError', 'ProfileTooShortError', 'ProfileBuilderPolicy')`
+Dive profile: the geometric plan of a dive.
+`__all__ = ('DiveProfile', 'ProfileSample', 'ProfileValidationError', 'ProfileContinuityError', 'ProfileSimplicityError', 'ProfileStartEndError', 'ProfileDepthContinuityError', 'ProfileGasContinuityError', 'ProfileEmptyError', 'ProfileTooShortError', 'ProfileBuilderPolicy')`
 ### class `ProfileValidationError` (ValueError) — Base descriptor for a dive profile validation problem.
-  - `__init__(self, message: str, *, segment_index: Optional[int] = None, segments: tuple[DiveSegment, ...] = ())`
+  - `__init__(self, message: str, *, segment_index: int | None = None, segments: tuple[DiveSegment, ...] = ())`
   attrs: `fixable: bool = False`
 ### class `ProfileEmptyError` (ProfileValidationError) — The profile has no segments. Not auto-fixable.
   - `__init__(self) -> None`
@@ -170,11 +201,13 @@ core/pressure.py — Pressure value type.
 ### class `ProfileBuilderPolicy` (Enum) — Policies for handling validation during dive profile construction.
   attrs: `RAISE_BAD_PROFILE = auto(); ALLOW_BAD_PROFILE = auto(); AUTOFIX_BAD_PROFILE = auto()`
 - `_as_timedelta(value: timedelta | float) -> timedelta`  — Coerce a time argument: timedelta as-is, bare numbers as minutes
+### class `ProfileSample` (NamedTuple) — One integration step on the profile's global timeline.
+  attrs: `time: timedelta; dt: timedelta; pressure: Pressure; gas: Gas; segment_index: int`
 ### class `DiveProfile` — A dive profile consisting of a sequence of dive segments.
   `__slots__ = ('_segments', '_builder_policy')`
   - `__init__(self, builder_policy: ProfileBuilderPolicy = ProfileBuilderPolicy.RAISE_BAD_PROFILE)`  — Initialize a new DiveProfile.
   - @property `builder_policy(self) -> ProfileBuilderPolicy`  — The active profile builder policy.
-  - `copy(self, *, override_policy: Optional[ProfileBuilderPolicy] = None) -> DiveProfile`  — Create a copy of the dive profile.
+  - `copy(self, *, override_policy: ProfileBuilderPolicy | None = None) -> DiveProfile`  — Create a copy of the dive profile.
   - `_get_last_pressure(self) -> Pressure`  — Current position — the end pressure of the last segment, or surface if empty.
   - `_get_last_gas(self) -> Gas`  — Get the gas of the last segment, or air if empty.
   - @property `segments(self) -> list[DiveSegment]`  — The list of segments in the profile.
@@ -185,8 +218,10 @@ core/pressure.py — Pressure value type.
   - `segment_at(self, t: timedelta | float) -> DiveSegment`  — The segment active at runtime `t` (minutes or timedelta).
   - `pressure_at(self, t: timedelta | float) -> Pressure`  — Ambient pressure at runtime `t` (minutes or timedelta), interpolated
   - `gas_at(self, t: timedelta | float) -> Gas`  — Breathing gas at runtime `t` (minutes or timedelta).
+  - `iter_samples(self, interval: timedelta | float) -> Iterator[ProfileSample]`  — Yield integration steps over the whole profile timeline.
   - @staticmethod `_is_gas_switch_seam(a: DiveSegment, b: DiveSegment) -> bool`  — A seam is a legitimate gas switch if either side is a GAS_SWITCH segment.
-  - `_seam_error(self, a: DiveSegment, b: DiveSegment, index: int) -> Optional[ProfileValidationError]`  — Return the most fundamental continuity error at the seam (a → b), or None.
+  - @staticmethod `_is_mergeable(a: DiveSegment, b: DiveSegment) -> bool`  — Adjacent segments are redundant only if fully continuous AND of the
+  - `_seam_error(self, a: DiveSegment, b: DiveSegment, index: int) -> ProfileValidationError | None`  — Return the most fundamental continuity error at the seam (a → b), or None.
   - `_raise_on_seam(self, a: DiveSegment, b: DiveSegment, index: int) -> None`  — Under RAISE policy, raise the seam error (a → b) if there is one.
   - `_check_insertion(self, index: int, segment: DiveSegment) -> None`  — Under RAISE policy, validate the seam(s) a new segment at `index` would create.
   - `_autofix(self) -> None`  — Under AUTOFIX policy, insert transitions and gas switches.
@@ -205,8 +240,8 @@ core/pressure.py — Pressure value type.
   - `get_last_segment(self) -> DiveSegment`  — Get the last segment in the profile.
   - `get_first_segment(self) -> DiveSegment`  — Get the first segment in the profile.
   - `get_segment_index(self, segment: DiveSegment) -> int`  — Find the index of a specific segment.
-  - `descend_to(self, depth: Pressure | str | float, *, rate: Optional[float] = None, gas: Gas | str | None = None) -> DiveProfile`  — Append a descent from the current position to `depth`.
-  - `ascend_to(self, depth: Pressure | str | float, *, rate: Optional[float] = None, gas: Gas | str | None = None, kind: SegmentKind.Ascent = SegmentKind.ASCENT) -> DiveProfile`  — Append an ascent from the current position to `depth`.
+  - `descend_to(self, depth: Pressure | str | float, *, rate: float | None = None, gas: Gas | str | None = None) -> DiveProfile`  — Append a descent from the current position to `depth`.
+  - `ascend_to(self, depth: Pressure | str | float, *, rate: float | None = None, gas: Gas | str | None = None, kind: SegmentKind.Ascent = SegmentKind.ASCENT) -> DiveProfile`  — Append an ascent from the current position to `depth`.
   - `stay(self, duration: timedelta | float, *, gas: Gas | str | None = None, kind: SegmentKind.Constant = SegmentKind.CONSTANT) -> DiveProfile`  — Append a constant-depth segment at the current position.
   - `switch_gas(self, gas: Gas | str) -> DiveProfile`  — Append a gas switch at the current position.
   - `surface(self) -> DiveProfile`  — Append an ascent from the current position to the surface at the
@@ -224,14 +259,56 @@ core/pressure.py — Pressure value type.
   - `add_surface_segments(self) -> DiveProfile`  — Ensure the profile both starts and ends at the surface.
   - `to_dict(self) -> dict[str, Any]`  — Serialize to a JSON-compatible dict (builder policy + segments).
   - @classmethod `from_dict(cls, data: Mapping[str, Any]) -> DiveProfile`  — Reconstruct a DiveProfile from :meth:`to_dict` output.
-  - `to_json(self, path: Optional[str] = None, indent: int = 2) -> str`  — Serialize to a JSON string, optionally writing to a file.
-  - @classmethod `from_json(cls, data: Optional[str] = None, path: Optional[str] = None) -> DiveProfile`  — Deserialize from a JSON string or file path (see :meth:`from_dict`).
+  - `to_json(self, path: str | None = None, indent: int = 2) -> str`  — Serialize to a JSON string, optionally writing to a file.
+  - @classmethod `from_json(cls, data: str | None = None, path: str | None = None) -> DiveProfile`  — Deserialize from a JSON string or file path (see :meth:`from_dict`).
 
 ## `src/diveplan/dive/dive_report.py`
-(empty stub)
+Dive report: everything about a computed dive, ready for presentation.
+`__all__ = ['DiveReport', 'ReportRow']`
+### class `ReportRow` (NamedTuple) — One schedule line: a segment with its cumulative runtime at the end.
+  attrs: `runtime: timedelta; start_depth_m: float; end_depth_m: float; duration: timedelta; gas: Gas; kind: str`
+### class `DiveReport` — Immutable summary of a computed dive.
+  `__slots__ = ('profile', 'model_name', 'rows', 'runtime', 'max_depth', 'consumption_l', 'cns', 'otus', 'rock_bottom_l', 'tts_variations')`
+  - `__init__(self, *, profile: DiveProfile, model_name: str, rows: tuple[ReportRow, ...], runtime: timedelta, max_depth: Pressure, consumption_l: tuple[tuple[Gas, float], ...], cns: float, otus: float, rock_bottom_l: float, tts_variations: TtsVariations | None)`
+  - @classmethod `from_dive(cls, dive: Dive[DecoState], *, gas_plan: GasPlan | None = None, tts_variations: TtsVariations | None = None) -> 'DiveReport'`  — Assemble a report from a computed dive.
+  attrs: `profile: DiveProfile; model_name: str; rows: tuple[ReportRow, ...]; runtime: timedelta; max_depth: Pressure; consumption_l: tuple[tuple[Gas, float], ...]; cns: float; otus: float; rock_bottom_l: float; tts_variations: TtsVariations | None`
+  dunders: `__repr__`
 
 ## `src/diveplan/dive/formatters/__init__.py`
-(empty stub)
+Report formatters: turn a DiveReport into an output document.
+`__all__ = ['BaseFormatter']`
+### class `BaseFormatter` (ABC) — Base class for all report formatters.
+  - @abstract `format(self, report: DiveReport) -> str`  — Render the report as a string in this formatter's output format.
+  attrs: `NAME: ClassVar[str]`
+
+## `src/diveplan/dive/formatters/console.py`
+Plain-text report formatter for terminals and logs.
+`__all__ = ['ConsoleFormatter']`
+- `_minutes(td: timedelta) -> str`
+- `_row_line(row: ReportRow) -> str`
+### class `ConsoleFormatter` (BaseFormatter) — Human-readable dive plan table with a summary block.
+  - @staticmethod `format_schedule(segments: Iterable[DiveSegment]) -> str`  — Render any segment sequence (a profile's or an ascent plan) as a
+  - `format(self, report: DiveReport) -> str`  — Render the full report: header, schedule table, totals block.
+  attrs: `NAME = 'console'`
+
+## `src/diveplan/dive/formatters/json.py`
+JSON report formatter — machine-readable dive plan document.
+`__all__ = ['JsonFormatter']`
+### class `JsonFormatter` (BaseFormatter) — Serialize the whole report to a JSON document.
+  - `__init__(self, *, indent: int | None = 2)`
+  - `format(self, report: DiveReport) -> str`  — Render the report as a JSON document string.
+  attrs: `NAME = 'json'`
+
+## `src/diveplan/dive/formatters/subsurface.py`
+Subsurface dive-log XML formatter (experimental).
+`__all__ = ['SubsurfaceXmlFormatter']`
+- `_mmss(td: timedelta) -> str`
+- `_depth(metres: float) -> str`
+- `_gas_attrs(gas: Gas) -> dict[str, str]`
+### class `SubsurfaceXmlFormatter` (BaseFormatter) — Render the report as a Subsurface dive-log XML document.
+  - `__init__(self, *, planned_at: datetime | None = None)`
+  - `format(self, report: DiveReport) -> str`  — Render the report as a Subsurface dive-log XML string.
+  attrs: `NAME = 'subsurface'; SAMPLE_STEP = timedelta(seconds=10)`
 
 ## `src/diveplan/models/__init__.py`
 (empty stub)
@@ -245,49 +322,146 @@ Decompression model base classes.
   `__slots__ = ('sample_rate_seconds',)`
   - @abstract `__init__(self) -> None`  — Initialize the decompression model.
   - `integrate_segment(self, segment: DiveSegment) -> StateT`  — Integrate a dive segment into the model and return the state after it.
+  - `get_state(self) -> StateT`  — Snapshot the current model state (public accessor).
+  - `integrate(self, pressure: Pressure, gas: Gas, dt: timedelta) -> None`  — Advance the model by a single step at the given pressure and gas.
   - @abstract `_integrate_model(self, pressure: Pressure, gas: Gas, dt: timedelta) -> None`  — Advance the model by dt at the given ambient pressure and gas.
   - @abstract `_get_deco_state(self) -> StateT`  — Snapshot the current model state.
   - @abstract `get_ceiling(self) -> Pressure`  — Return the current ceiling depth.
+  - @abstract `set_state(self, state: StateT) -> None`  — Restore the model to a previously snapshotted state (lossless).
+  - @abstract `copy(self) -> Self`  — Independent clone with identical configuration and current state.
   attrs: `NAME: ClassVar[str]`
 
 ## `src/diveplan/models/buhlmann/__init__.py`
-(empty stub)
+Bühlmann-family decompression models.
+`__all__ = ['BuhlmannModel', 'BuhlmannState', 'ZHL16C', 'Compartment', 'Gradient']`
 
 ## `src/diveplan/models/buhlmann/common.py`
-`__all__ = ('Gradient', 'Compartment')`
-### class `Gradient` — Helper for computing gradients of dive segments.
+Shared Bühlmann machinery: gradient factors and Haldane tissue compartments.
+`__all__ = ('Gradient', 'Compartment', 'WATER_VAPOR_PRESSURE_MBAR')`
+- const `WATER_VAPOR_PRESSURE_MBAR = 62.7`
+### class `Gradient` — A gradient-factor pair (Baker GF low/high), as fractions.
   `__slots__ = ('gf_low', 'gf_high')`
   - `__init__(self, gf_low: float, gf_high: float)`
-  - `factor(self, depth_pressure: Pressure, max_depth_pressure: Pressure) -> float`  — Linearly interpolate the gradient for a given depth.
+  - @classmethod `from_str(cls, s: str) -> 'Gradient'`  — Parse the usual GF notation: ``"30/70"``, ``"GF 30/70"``, ``"85/85"``.
+  - `factor(self, pressure: Pressure, first_stop_pressure: Pressure) -> float`  — Gradient factor applicable at ``pressure``.
   attrs: `gf_low: float; gf_high: float`
   dunders: `__eq__, __hash__, __repr__, __str__`
-### class `Compartment` — Helper for tracking compartment constants and saturation.
-  `__slots__ = ('ppn2', 'pphe', 'ht_n2', 'ht_he', 'a_n2', 'a_he', 'b_n2', 'b_he', 'tolerated_pressure')`
-  - `__init__(self, *, ht_n2: float, ht_he: float, a_n2: float, a_he: float, b_n2: float, b_he: float, ppn2: Optional[Pressure] = None, pphe: Optional[Pressure] = None)`
-  - `update_compartment(self, pressure: Pressure, gas: Gas, duration: timedelta, gradient_factor: float)`
-  - `_integrate_compartment(self, pressure: Pressure, gas: Gas, duration: timedelta)`
-  - `_update_compartment_max_tolerated_pressure(self, ambiant_pressure: Pressure, gradient_factor: float)`
-  - @staticmethod `_calc_inert_gas_pressure(ambiant_pressure: Pressure, inspired_gas_pressure: Pressure, time_minutes: float, half_time_minutes: float) -> Pressure`
-  - @staticmethod `_calcInertGasLimit(ppn2: Pressure, pphe: Pressure, a_n2: float, b_n2: float, a_he: float, b_he: float, ambiant_pressure: Pressure, gradient_factor: float) -> Pressure`
-  - `is_eq_pressures_only(self, other: Compartment) -> bool`
-  - `is_eq_with_pressures(self, other: Compartment) -> bool`
-  attrs: `ppn2: Pressure; pphe: Pressure; ht_n2: float; ht_he: float; a_n2: float; a_he: float; b_n2: float; b_he: float`
+### class `Compartment` — One Haldane tissue compartment with Bühlmann a/b coefficients.
+  `__slots__ = ('ht_n2', 'ht_he', 'a_n2', 'a_he', 'b_n2', 'b_he', '_ppn2_mbar', '_pphe_mbar')`
+  - `__init__(self, *, ht_n2: float, ht_he: float, a_n2: float, a_he: float, b_n2: float, b_he: float, ppn2: Pressure | None = None, pphe: Pressure | None = None)`
+  - @property `ppn2(self) -> Pressure`  — Current N2 tension (rounded to integer mbar for display/compare).
+  - @property `pphe(self) -> Pressure`  — Current He tension (rounded to integer mbar for display/compare).
+  - @property `tensions_mbar(self) -> tuple[float, float]`  — Exact (ppn2, pphe) tensions in float mbar — for state snapshots.
+  - `set_tensions_mbar(self, ppn2_mbar: float, pphe_mbar: float) -> None`  — Restore exact tensions from a state snapshot.
+  - `copy(self) -> 'Compartment'`  — Independent copy with the same constants and current tensions.
+  - `integrate(self, pressure: Pressure, gas: Gas, duration: timedelta) -> None`  — Haldane exponential update toward the alveolar inert pressures.
+  - `tolerated_ambient_pressure(self, gradient_factor: float = 1.0) -> Pressure`  — Minimum ambient pressure this compartment tolerates (Baker formula).
+  attrs: `ht_n2: float; ht_he: float; a_n2: float; a_he: float; b_n2: float; b_he: float`
   dunders: `__eq__, __hash__, __repr__, __str__`
 
+## `src/diveplan/models/buhlmann/model.py`
+Generic Bühlmann decompression engine.
+`__all__ = ['BuhlmannModel', 'BuhlmannState']`
+### class `BuhlmannState` (DecoState) — Frozen snapshot of (ppn2, pphe) tissue tensions in float mbar.
+  `__slots__ = ('tissues',)`
+  - `__init__(self, tissues: tuple[tuple[float, float], ...])`
+  attrs: `tissues: tuple[tuple[float, float], ...]`
+  dunders: `__delattr__, __eq__, __hash__, __repr__, __setattr__`
+### class `BuhlmannModel` (BaseDecoModel[BuhlmannState]) — Bühlmann algorithm over a subclass-supplied coefficient table.
+  `__slots__ = ('gradient', '_compartments')`
+  - `__init__(self, gradient: Gradient | str | None = None)`
+  - @property `compartment_count(self) -> int`  — Number of tissue compartments in this model's table.
+  - `_integrate_model(self, pressure: Pressure, gas: Gas, dt: timedelta) -> None`
+  - `_get_deco_state(self) -> BuhlmannState`
+  - `get_ceiling(self, gradient_factor: float | None = None) -> Pressure`  — Minimum tolerated ambient pressure across all compartments.
+  - `set_state(self, state: BuhlmannState) -> None`  — Restore tissue tensions from a snapshot (exact, lossless).
+  - `copy(self) -> Self`  — Independent clone with the same gradient and tissue tensions —
+  attrs: `N2_HALF_TIMES: ClassVar[tuple[float, ...]]; N2_A: ClassVar[tuple[float, ...]]; N2_B: ClassVar[tuple[float, ...]]; HE_HALF_TIMES: ClassVar[tuple[float, ...]]; HE_A: ClassVar[tuple[float, ...]]; HE_B: ClassVar[tuple[float, ...]]; gradient: Gradient`
+  dunders: `__init_subclass__, __repr__`
+
+## `src/diveplan/models/buhlmann/zhl16.py`
+Bühlmann ZHL-16 variants — coefficient tables over the shared engine.
+`__all__ = ['ZHL16C', 'BuhlmannState']`
+### class `ZHL16C` (BuhlmannModel) — Bühlmann ZHL-16C, 16 compartments (1b first-compartment variant).
+  `__slots__ = ()`
+  attrs: `NAME = 'zhl16c'; N2_HALF_TIMES = (5.0, 8.0, 12.5, 18.5, 27.0, 38.3, 54.3, 77.0, 109.0, 146.0, 187.0, 239.0, 305.0, 390.0, 498.0, 635.0); N2_A = (1.1696, 1.0, 0.8618, 0.7562, 0.62, 0.5043, 0.441, 0.4, 0.375, 0.35, 0.3295, 0.3065, 0.2835, 0.261, 0.248, 0.2327); N2_B = (0.5578, 0.6514, 0.7222, 0.7825, 0.8126, 0.8434, 0.8693, 0.891, 0.9092, 0.9222, 0.9319, 0.9403, 0.9477, 0.9544, 0.9602, 0.9653); HE_HALF_TIMES = (1.88, 3.02, 4.72, 6.99, 10.21, 14.48, 20.53, 29.11, 41.2, 55.19, 70.69, 90.34, 115.29, 147.42, 188.24, 240.03); HE_A = (1.6189, 1.383, 1.1919, 1.0458, 0.922, 0.8205, 0.7305, 0.6502, 0.595, 0.5545, 0.5333, 0.5189, 0.5181, 0.5176, 0.5172, 0.5119); HE_B = (0.477, 0.5747, 0.6527, 0.7223, 0.7582, 0.7957, 0.8279, 0.8553, 0.8757, 0.8903, 0.8997, 0.9073, 0.9122, 0.9171, 0.9217, 0.9267)`
+
+## `src/diveplan/models/vpm/__init__.py`
+VPM-family (bubble) decompression models.
+`__all__ = ['VpmB', 'VpmState']`
+
+## `src/diveplan/models/vpm/model.py`
+VPM-B decompression model (Varying Permeability Model, revision B).
+`__all__ = ['VpmB', 'VpmState']`
+- const `SURFACE_TENSION_GAMMA = 0.18137175`
+- const `SKIN_COMPRESSION_GAMMA_C = 2.6040525`
+- const `CRIT_RADIUS_N2_UM = 0.55`
+- const `CRIT_RADIUS_HE_UM = 0.45`
+- const `GRADIENT_OF_IMPERMEABILITY_BAR = 8.30865`
+- const `REGENERATION_TIME_MIN = 20160.0`
+- const `OTHER_GASES_PRESSURE_BAR = 0.1359888`
+- const `CRIT_VOLUME_LAMBDA_BAR_MIN = 199.58`
+- const `CONSERVATISM_RADIUS_SCALE = (1.0, 1.05, 1.12, 1.22, 1.35)`
+- `allowable_gradient_bar(radius_um: float) -> float`  — Initial allowable supersaturation gradient for a nucleus of `radius_um`.
+- `crushed_radius_um(max_crushing_bar: float, initial_radius_um: float) -> float`  — Nucleus radius after being crushed by `max_crushing_bar`.
+- `regenerated_radius_um(crushed_um: float, initial_radius_um: float, elapsed_min: float) -> float`  — Crushed nucleus regrowing toward its initial radius (τ = 2 weeks).
+- `impermeable_crushing_bar(ambient_bar: float, onset_tension_bar: float, initial_radius_um: float) -> float`  — Crushing pressure in the impermeable regime (gradient > 8.30865 bar).
+### class `VpmState` (DecoState) — Frozen VPM-B snapshot.
+  `__slots__ = ('compartments', 'runtime_min')`
+  - `__init__(self, compartments: tuple[tuple[float, float, float, float, float], ...], runtime_min: float)`
+  attrs: `compartments: tuple[tuple[float, float, float, float, float], ...]; runtime_min: float`
+  dunders: `__delattr__, __eq__, __hash__, __repr__, __setattr__`
+### class `VpmB` (BaseDecoModel[VpmState]) — VPM-B core model (pre-CVA ceilings; see module docstring for scope).
+  `__slots__ = ('conservatism', '_compartments', '_max_crush_n2_bar', '_max_crush_he_bar', '_onset_tension_bar', '_runtime_min')`
+  - `__init__(self, conservatism: int = 0)`
+  - @property `crit_radius_n2_um(self) -> float`  — Initial N2 critical radius after conservatism scaling.
+  - @property `crit_radius_he_um(self) -> float`  — Initial He critical radius after conservatism scaling.
+  - @staticmethod `_total_tension_bar(compartment: Compartment) -> float`
+  - `_update_crushing(self, ambient_bar: float, index: int) -> None`  — Track the maximum crushing pressure seen by compartment `index`.
+  - `_allowable_gradients_bar(self, index: int) -> tuple[float, float]`  — Current (N2, He) allowable gradients for compartment `index` —
+  - `_integrate_model(self, pressure: Pressure, gas: Gas, dt: timedelta) -> None`
+  - `_get_deco_state(self) -> VpmState`
+  - `get_ceiling(self) -> Pressure`  — Minimum tolerated ambient pressure across compartments (pre-CVA).
+  - `set_state(self, state: VpmState) -> None`  — Restore tissue tensions and bubble bookkeeping from a snapshot.
+  - `copy(self) -> Self`  — Independent clone (same conservatism, tensions, crushing history).
+  attrs: `NAME = 'vpmb'; COMPARTMENT_COUNT: ClassVar[int] = len(ZHL16C.N2_HALF_TIMES); conservatism: int`
+  dunders: `__repr__`
+
 ## `src/diveplan/planning/__init__.py`
-(empty stub)
+Ascent planning: deco schedules and gas selection.
+`__all__ = ['plan_ascent', 'GasPlan', 'AscentNotConvergingError']`
 
 ## `src/diveplan/planning/ascent_plan.py`
-(empty stub)
+Ascent planner: compute the decompression schedule from a model state.
+`__all__ = ['plan_ascent', 'AscentNotConvergingError']`
+### class `AscentNotConvergingError` (RuntimeError) — The stop loop failed to clear the next target within the iteration cap.
+- `_ceiling(model: BaseDecoModel[Any], target: Pressure, first_stop: Pressure | None) -> Pressure`  — Model ceiling for an ascent-to-`target` test.
+- `_next_targets(current: Pressure) -> list[Pressure]`  — Candidate ascent targets from shallowest to deepest: the surface, then
+- `plan_ascent(model: BaseDecoModel[Any], start_pressure: Pressure | str | float, gas: Gas | str, gas_plan: GasPlan | None = None, clock_offset: timedelta | float = timedelta(0)) -> list[DiveSegment]`  — Plan the decompression ascent from the given position and model state.
 
 ## `src/diveplan/planning/gas_plan.py`
-(empty stub)
+Gas plan: carried gases, selection, consumption, and reserve planning.
+`__all__ = ['GasPlan', 'gas_consumption', 'rock_bottom', 'cns_percent', 'otu', 'NOAA_CNS_LIMITS']`
+### class `GasPlan` — An ordered collection of carried gases with depth-based selection.
+  `__slots__ = ('_gases',)`
+  - `__init__(self, gases: Iterable[Gas | str])`
+  - @property `gases(self) -> tuple[Gas, ...]`  — The carried gases (duplicates removed, insertion order).
+  - @staticmethod `is_breathable(gas: Gas, pressure: Pressure) -> bool`  — Whether `gas` is within the configured deco ppO2 window here.
+  - `best_gas_at(self, pressure: Pressure) -> Gas | None`  — Richest breathable gas at `pressure`, or None if none qualifies.
+  dunders: `__repr__`
+- `gas_consumption(segments: Iterable[DiveSegment]) -> dict[Gas, float]`  — Surface litres of each gas consumed over `segments`.
+- `rock_bottom(depth: Pressure | str | float, *, divers: int = 2) -> float`  — Minimum gas reserve (surface litres) at `depth` for an emergency.
+- `_cns_limit_minutes(ppo2_bar: float) -> float | None`  — NOAA limit at `ppo2_bar`, linearly interpolated; None below the floor.
+- `_iter_ppo2(segments: Iterable[DiveSegment], step: timedelta) -> Iterable[tuple[float, float]]`  — Yield (minutes, ppO2 bar) exposures: one per constant segment, midpoint
+- `cns_percent(segments: Iterable[DiveSegment], *, step: timedelta = timedelta(seconds=10)) -> float`  — CNS oxygen-toxicity clock over `segments`, in percent (100 = NOAA limit).
+- `otu(segments: Iterable[DiveSegment], *, step: timedelta = timedelta(seconds=10)) -> float`  — Pulmonary oxygen-toxicity units (REPEX) accumulated over `segments`.
 
 ## `src/diveplan/registry.py`
-### class `PluginNotFoundError` (KeyError)
+Entry-point plugin discovery for decompression models.
+### class `PluginNotFoundError` (KeyError) — No plugin is registered under the requested name.
   - `__init__(self, name: str, available: list[str]) -> None`
-### class `PluginInvalidError` (TypeError)
-### class `PluginRegistry`
+### class `PluginInvalidError` (TypeError) — A discovered or registered plugin does not subclass BaseDecoModel.
+### class `PluginRegistry` — Deco-model lookup: entry-point discovery plus manual registration.
   - `__init__(self) -> None`
   - @cached_property `_discovered(self) -> dict[str, type[BaseDecoModel[Any]]]`  — Discovered once from entry points, then frozen.
   - @property `_all(self) -> dict[str, type[BaseDecoModel[Any]]]`  — Overrides shadow discovered plugins of the same name.
@@ -301,17 +475,23 @@ Decompression model base classes.
 (empty stub)
 
 ## `src/diveplan/utils/conversions.py`
+Argument-coercion helpers shared across the user-facing API.
 `__all__ = ['coerce_depth_to_pressure', 'coerce_gas', 'duration_from_rate', 'DEPTH_TYPES', 'GAS_TYPES']`
 - const `DEPTH_TYPES = float | int | str | Pressure`
 - const `GAS_TYPES = str | Gas`
-- `coerce_depth_to_pressure(value: DEPTH_TYPES) -> Pressure`
-- `coerce_gas(value: GAS_TYPES) -> Gas`
-- `duration_from_rate(rate: float, start_pressure: Pressure, end_pressure: Pressure) -> float`
+- `coerce_depth_to_pressure(value: DEPTH_TYPES) -> Pressure`  — Convert a user-facing depth argument to an absolute :class:`Pressure`.
+- `coerce_gas(value: GAS_TYPES) -> Gas`  — Convert a user-facing gas argument to a :class:`Gas`.
+- `duration_from_rate(rate: float, start_pressure: Pressure, end_pressure: Pressure) -> float`  — Traverse duration implied by a rate of pressure change.
 
 # Tests (tests/)
 - `conftest.py` (0 tests)
+- `test_buhlmann.py` (47 tests) — TestGradient, TestCompartmentState, TestCompartmentIntegration, TestCompartmentToleratedPressure, TestZHL16CTables, TestZHL16CModel, MiniBuhlmann, TestBuhlmannFamily, TestZHL16CRegistry
 - `test_config.py` (45 tests) — TestSubConfigBase, TestPhysicsConfig, TestGasConfig, TestDivePlanningConfig, TestDiveConfigStructure, TestGlobalDefault, TestContextManager, TestDefaultConfigLoading, TestSerialization
+- `test_dive.py` (28 tests) — TestIterSamples, TestDiveRun, TestDiveQueries, TestDiveContinuation, TestOxygenQueries
 - `test_dive_profile.py` (74 tests) — TestDiveProfileBuilder, TestDiveProfileValidation, TestDiveProfileFixes, TestDiveProfileTimeline, TestDiveProfileFluentBuilders, TestDiveProfileSerialization
 - `test_dive_segment.py` (59 tests) — TestDiveSegmentConstruction, TestDiveSegmentProperties, TestDiveSegmentInterpolation, TestDiveSegmentSplitting, TestDiveSegmentMerging, TestDiveSegmentContinuity, TestDiveSegmentIteration, TestDiveSegmentMagicMethods, TestDiveSegmentImmutability, TestDiveSegmentSerialization
 - `test_gas.py` (61 tests) — TestRawConstruction, TestNamedConstructors, TestFromName, TestPartialPressures, TestMod, TestEnd, TestBestMix, TestEqualityAndHash, TestStringRepresentation
+- `test_planning.py` (18 tests) — TestGasPlan, TestPlanAscentNoDeco, TestPlanAscentDeco
 - `test_pressure.py` (70 tests) — TestConstruction, TestProperties, TestAltConstructorsAndProperties, TestStringParsing, TestImmutability, TestAddition, TestSubtraction, TestMultiplication, TestDivision, TestOrdering, TestHashing, TestDisplay
+- `test_report.py` (21 tests) — TestGasConsumption, TestRockBottom, TestOxygenExposure, TestTtsVariations, TestDiveReport
+- `test_vpm.py` (23 tests) — TestBubbleMechanics, TestVpmBModel, TestVpmBRegistry

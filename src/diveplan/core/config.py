@@ -209,6 +209,16 @@ class _GasConfig(_SubConfig):
         gt=0,
         description="L/min — surface air consumption at deco stops",
     )
+    sac_factor: float = Field(
+        default=2.0,
+        gt=0,
+        description="stress multiplier on SAC for rock-bottom/emergency planning",
+    )
+    problem_solving_minutes: float = Field(
+        default=1.0,
+        ge=0,
+        description="minutes spent solving a problem at depth (rock bottom)",
+    )
     gas_switch_minutes: float = Field(
         default=1.0,
         ge=0,
@@ -361,9 +371,7 @@ class DiveConfig(BaseModel):
     def __exit__(self, *_: object) -> None:
         stack = DiveConfig._stack.get()
         DiveConfig._stack.set(stack[:-1])
-        logger.debug(
-            "diveplan: config context exited (stack depth %d)", len(stack) - 1
-        )
+        logger.debug("diveplan: config context exited (stack depth %d)", len(stack) - 1)
 
     # -------------------------------------------------------------------
     # Serialization

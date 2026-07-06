@@ -13,7 +13,7 @@ simulations comparing algorithms, gases, and conditions.
 
 ## Status
 
-Early development. The **core layer is implemented and tested**:
+Early development — **all layers below are implemented and tested** (458 tests, strict mypy):
 
 | Component | Status |
 |---|---|
@@ -21,9 +21,14 @@ Early development. The **core layer is implemented and tested**:
 | `Gas` — O2/He/N2 mixes, MOD/END/best-mix | ✅ |
 | `DiveSegment` / `SegmentKind` — one leg of a profile | ✅ |
 | `DiveConfig` — physics / planning / gas config, scoped overrides | ✅ |
-| `DiveProfile` — builder, validation & repair | ✅ |
+| `DiveProfile` — builder, validation & repair, timeline | ✅ |
 | Plugin registry (entry-point deco-model discovery) | ✅ |
-| Deco models (ZHL-16C), ascent planner, reports | 🚧 in progress |
+| Deco models — Bühlmann ZHL-16C (GF), VPM-B (pre-CVA) | ✅ |
+| `Dive` — checkpoints, `state_at`/`ceiling_at`/`tts(t)`, `with_ascent` | ✅ |
+| Ascent planner (`plan_ascent`) + `GasPlan` | ✅ |
+| `DiveReport` + formatters (console, JSON, Subsurface XML) | ✅ |
+| Gas consumption, rock bottom, CNS/OTU, TTS variations | ✅ |
+| VPM-B critical-volume/Boyle stage | 🚧 in progress |
 
 ## Design principles
 
@@ -53,6 +58,19 @@ pip install -e ".[dev]"
 ```
 
 ## Quickstart
+
+Runnable, commented examples live in [`examples/`](examples/):
+
+| Example | Shows |
+|---|---|
+| [`complete_dive_plan.py`](examples/complete_dive_plan.py) | The full workflow: config, gases, profile, Dive, ascent, report, formatters |
+| [`batch_model_comparison.py`](examples/batch_model_comparison.py) | TTS grids across depths/times/models, incl. an altitude/fresh-water override |
+| [`custom_deco_model.py`](examples/custom_deco_model.py) | Writing and registering your own (Bühlmann-family) deco model |
+| [`tissue_loading_chart.py`](examples/tissue_loading_chart.py) | Dependency-free visualization of depth, ceiling, and tissue loading |
+
+```bash
+uv run python examples/complete_dive_plan.py
+```
 
 ```python
 from diveplan import Pressure, Gas, DiveConfig
@@ -99,6 +117,26 @@ profile.to_json(path="dive.json")
 restored = DiveProfile.from_json(path="dive.json")
 ```
 
+Running a deco model over the profile — a `Dive` can be in progress (just
+the bottom phase) and completed with its planned ascent:
+
+```python
+from diveplan import Dive
+from diveplan.models.buhlmann.zhl16 import ZHL16C
+
+bottom = DiveProfile().descend_to("40 m").stay(25)
+dive = Dive.run(bottom, ZHL16C(gradient="30/70"))
+
+dive.ceiling_at(23).depth_m   # deco ceiling 23 minutes into the dive
+dive.tts(23)                  # time-to-surface if ascending right now
+dive.cns_at(23), dive.otu_at(23)   # oxygen exposure accumulated so far
+for t, state in dive.tissue_series(1):   # tissue loading, 1-min samples
+    ...
+
+full = dive.with_ascent()     # new Dive completed with the deco schedule
+full.profile.runtime          # total runtime including stops
+```
+
 Segments can still be added explicitly (`add_segment`, `insert_segment_at_index`,
 …) and repaired after the fact:
 
@@ -126,11 +164,11 @@ defaults (useful in CI and tests). Overrides apply via `DiveConfig.set_default()
 ```
 src/diveplan/
 ├── core/        # value objects + config (Pressure, Gas, DiveSegment, DiveConfig)
-├── dive/        # DiveProfile, reports, formatters
-├── models/      # deco models (ZHL-16C) + helpers
-├── planning/    # ascent planner, gas plan
-├── utils/       # conversions
-└── registry.py  # entry-point plugin discovery
+├── dive/        # DiveProfile, Dive, DiveReport, oxygen exposure, formatters
+├── models/      # deco models: Bühlmann family (ZHL-16C), VPM-B
+├── planning/    # ascent planner, gas plan, consumption, rock bottom
+├── utils/       # argument coercion ("40 m", "ean50")
+└── registry.py  # entry-point plugin discovery (diveplan.deco_models)
 ```
 
 ## Development

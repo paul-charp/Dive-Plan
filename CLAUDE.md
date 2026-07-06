@@ -35,11 +35,13 @@ Line endings are LF, enforced via `.gitattributes`.
 Layering (imports flow strictly downward; `core/` never imports from upper layers):
 
 ```
-core/      Pressure, Gas, DiveSegment, DiveConfig — value objects + config
-dive/      DiveProfile (builder/validation/timeline), reports, formatters
-models/    deco models (BaseDecoModel, DecoState, Bühlmann helpers)
-planning/  ascent planner, gas plan (stubs — in progress)
-registry.py  entry-point plugin discovery for deco models
+core/          Pressure, Gas, DiveSegment, DiveConfig — value objects + config
+dive/dive_profile.py  DiveProfile (builder/validation/timeline/iter_samples) — core only
+models/        deco models (BaseDecoModel[StateT], Bühlmann family, VPM-B)
+planning/      plan_ascent, GasPlan, consumption/rock-bottom/CNS/OTU — consumes models
+dive/dive.py   Dive — top of the stack (profile + models + planning)
+dive/dive_report.py   DiveReport (pure data) + dive/formatters/ (console, json, subsurface XML)
+registry.py    entry-point plugin discovery for deco models
 ```
 
 ### Pressure is ground truth
@@ -61,7 +63,9 @@ Tests: `tests/conftest.py` has an autouse fixture pinning a fresh factory-defaul
 
 ### DiveProfile: plan is input, results are output
 
-A profile is pure geometry (list of segments). Do **not** hang model results (tissue states, ceilings, TTS) on segments or the profile — results belong in a separate result layer so one profile can be run under multiple models/GFs and compared. This is a deliberate, agreed design constraint.
+A profile is pure geometry (list of segments). Do **not** hang model results (tissue states, ceilings, TTS) on segments or the profile — results live in `Dive` (`dive/dive.py`) so one profile can be run under multiple models/GFs and compared. This is a deliberate, agreed design constraint.
+
+`Dive.run(profile, model)` copies the model, integrates, and stores **state checkpoints at segment boundaries only** (O(segments) memory for batch). Time queries (`state_at`, `ceiling_at`, `model_at`, `cns_at`/`otu_at`, `tts(t)`) re-integrate at most one partial segment from the nearest checkpoint — exact, because Haldane integration composes. `tissue_series(dt)` reproduces checkpoints exactly only when sampled at the model's own rate (rectangle rule). `DiveProfile.iter_samples(interval)` is the single sampling authority: steps never cross segment boundaries, the last step of a segment is shortened, zero-duration switches yield no step.
 
 Key mechanics spread across `dive/dive_profile.py`:
 
@@ -73,13 +77,22 @@ Key mechanics spread across `dive/dive_profile.py`:
 
 ### Deco models and plugins
 
-`BaseDecoModel[StateT: DecoState]` (PEP 695 generics): each model defines its own immutable `DecoState` subclass and returns typed state, not dicts. State snapshots are the currency for future checkpointing and counterfactual queries (TTS at time t) — keep them cheap to copy.
+`BaseDecoModel[StateT: DecoState]` (PEP 695 generics): each model defines its own immutable `DecoState` subclass and returns typed state, not dicts. `set_state()`/`copy()`/`get_state()` are abstract contract — the result layer's checkpointing and TTS counterfactuals depend on them being lossless and cheap.
+
+Model families: `BuhlmannModel` (models/buhlmann/model.py) is the whole Bühlmann algorithm; a variant like `ZHL16C` is only `NAME` + six coefficient tables, validated at class-definition time. VPM-B (models/vpm/) is a bubble model: same ZHL-16 half-times for loading, ceiling from nuclei mechanics; constants verified against Subsurface deco.cpp (bar/µm units). Tissue tensions are **float mbar internally** in both families — integer quantization would freeze slow compartments at 1 s steps; `Pressure` is the boundary type only.
+
+### Ascent planner
+
+`plan_ascent(model, start_pressure, gas, gas_plan)` (planning/ascent_plan.py) is a pure function: clones the model, returns continuous segments to the surface (deco ascents merged, stop chunks merged, gas switches at stops). GF models get the gradient interpolated at each target depth, anchored at the first (deepest) stop of the ascent; non-GF models are asked for their plain ceiling. Known limits: gas switches only at stops; VPM-B's Critical Volume Algorithm and Boyle compensation are **not applied yet** — its schedules use conservative pre-CVA gradients (`CRIT_VOLUME_LAMBDA_BAR_MIN` is exported for when CVA lands here).
 
 Plugin discovery: entry-point group **`diveplan.deco_models`** (single source of truth: `_ENTRY_POINT_GROUP` in `registry.py`). The registry eagerly loads *every* entry point in the group on first access, so never register an entry point in `pyproject.toml` before its module exists — one dangling reference breaks all model lookups. The `zhl16c` and formatter entry points are commented out in `pyproject.toml` until their modules land; `DiveConfig.planning.default_model` defaults to `"zhl16c"`, so uncomment the entry point in the same PR that adds `zhl16.py`. `registry.register_model()` is the manual escape hatch for tests.
 
+### Report layer
+
+`DiveReport.from_dive(dive)` is pure data: schedule rows + gas consumption (surface litres, exact per linear segment), CNS/OTU (`planning/gas_plan.py`), rock bottom at max depth, and optional `TtsVariations` (the "+1 m / +1 min" figures — compute them on the *bottom* dive via `Dive.tts_variations()`, they are meaningless on a full dive with deco). Formatters (`BaseFormatter.format(report) -> str`) are presentation-only; entry-point group `diveplan.formatters` (console/json/subsurface). Consumption/CNS/OTU take `Iterable[DiveSegment]`, so they work on plans as well as profiles.
+
 ### Known state / gotchas
 
-- `models/buhlmann/common.py` is in-progress and has known issues: `Gradient.factor` is inverted vs. standard gradient-factor convention (GF-low belongs at the deepest stop, GF-high at surface) and interpolates on absolute-pressure ratio; it also fails strict mypy. Fix before building the ascent planner on it.
-- `planning/` and `dive/dive_report.py` are empty stubs.
+- VPM-B CVA + Boyle compensation pending in the planner (see above).
 - `diveplan_roadmap.md` predates implementation and drifts from the code in places (e.g. `DiveStep`/`AbstractDecoModel` naming — the code's `DiveSegment`/`BaseDecoModel` won); trust the code.
-- `__init__.py` re-exports core types and a `diveconfig` proxy; planning/dive/report symbols get re-exported there as layers land.
+- `__init__.py` re-exports core types, `Dive`, `DiveProfile`, `GasPlan`, `plan_ascent`, and a `diveconfig` proxy.

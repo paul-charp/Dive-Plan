@@ -239,6 +239,7 @@ class Pressure:
 
     @property
     def is_surface(self) -> bool:
+        """Whether this pressure is at (or above) the configured surface."""
         physics = DiveConfig.current().physics
         return self._mbar <= physics.surface_pressure_mbar
 

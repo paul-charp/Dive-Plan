@@ -1,10 +1,27 @@
+"""Dive profile: the geometric plan of a dive.
+
+A :class:`DiveProfile` is a validated sequence of
+:class:`~diveplan.core.dive_segment.DiveSegment` — pure input geometry,
+deliberately free of model results. It offers three ways of working:
+
+- **building** — fluent methods (``descend_to("40 m")``, ``stay``,
+  ``switch_gas("ean50")``…) and explicit segment surgery, governed by a
+  :class:`ProfileBuilderPolicy`;
+- **validation & repair** — problems are returned as pure-data
+  :class:`ProfileValidationError` descriptors; canonical repairs live on
+  ``fix``/``fix_all``;
+- **timeline** — address the profile by runtime (``pressure_at(23)``), and
+  sample it for integration via ``iter_samples`` (the single sampling
+  authority used by models and visualization).
+"""
+
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from datetime import timedelta
 from enum import Enum, auto
-from typing import Any, Optional
+from typing import Any, NamedTuple
 
 from ..core.config import DiveConfig
 from ..core.dive_segment import DiveSegment, SegmentKind
@@ -14,6 +31,7 @@ from ..utils.conversions import coerce_depth_to_pressure, coerce_gas
 
 __all__ = (
     "DiveProfile",
+    "ProfileSample",
     "ProfileValidationError",
     "ProfileContinuityError",
     "ProfileSimplicityError",
@@ -58,7 +76,7 @@ class ProfileValidationError(ValueError):
         self,
         message: str,
         *,
-        segment_index: Optional[int] = None,
+        segment_index: int | None = None,
         segments: tuple[DiveSegment, ...] = (),
     ):
         super().__init__(message)
@@ -218,6 +236,21 @@ def _as_timedelta(value: timedelta | float) -> timedelta:
     return timedelta(minutes=value)
 
 
+class ProfileSample(NamedTuple):
+    """One integration step on the profile's global timeline.
+
+    Represents the half-open interval ``(time - dt, time]``: ``pressure`` is
+    the ambient pressure at the *end* of the step (rectangle rule, matching
+    BaseDecoModel), ``gas`` the breathing gas throughout it.
+    """
+
+    time: timedelta
+    dt: timedelta
+    pressure: Pressure
+    gas: Gas
+    segment_index: int
+
+
 # ------------------------------------------------------------------
 # Dive Profile
 # ------------------------------------------------------------------
@@ -262,7 +295,7 @@ class DiveProfile:
         return self._builder_policy
 
     def copy(
-        self, *, override_policy: Optional[ProfileBuilderPolicy] = None
+        self, *, override_policy: ProfileBuilderPolicy | None = None
     ) -> DiveProfile:
         """Create a copy of the dive profile.
 
@@ -375,6 +408,40 @@ class DiveProfile:
         """Breathing gas at runtime `t` (minutes or timedelta)."""
         return self.segment_at(t).gas
 
+    def iter_samples(self, interval: timedelta | float) -> Iterator[ProfileSample]:
+        """Yield integration steps over the whole profile timeline.
+
+        The single sampling authority for model integration and
+        visualization: steps never cross a segment boundary (the last step of
+        each segment is shortened as needed, so boundaries are hit exactly —
+        checkpoints depend on this), zero-duration gas-switch segments yield
+        no step, and each step's dt sums exactly to the total runtime.
+
+        Args:
+            interval: Sample step — minutes as a number, or a timedelta.
+
+        Raises:
+            ValueError: If the interval is not strictly positive.
+        """
+        step_size = _as_timedelta(interval)
+        if step_size <= timedelta(0):
+            raise ValueError(f"Sample interval must be > 0, got {step_size}.")
+
+        elapsed = timedelta(0)
+        for index, segment in enumerate(self._segments):
+            into_segment = timedelta(0)
+            while into_segment < segment.duration:
+                dt = min(step_size, segment.duration - into_segment)
+                into_segment += dt
+                yield ProfileSample(
+                    time=elapsed + into_segment,
+                    dt=dt,
+                    pressure=segment.pressure_at_time(into_segment),
+                    gas=segment.gas,
+                    segment_index=index,
+                )
+            elapsed += segment.duration
+
     # ------------------------------------------------------------------
     # Seam helpers — local (O(1)) validation between two adjacent segments
     # ------------------------------------------------------------------
@@ -387,9 +454,16 @@ class DiveProfile:
             or b.kind is SegmentKind.Constant.GAS_SWITCH
         )
 
+    @staticmethod
+    def _is_mergeable(a: DiveSegment, b: DiveSegment) -> bool:
+        """Adjacent segments are redundant only if fully continuous AND of the
+        same kind — merging a GAS_SWITCH into a stop (or a deco ascent into a
+        forced one) would erase meaningful semantics, not simplify."""
+        return a.kind == b.kind and a.is_fully_continuous_with(b)
+
     def _seam_error(
         self, a: DiveSegment, b: DiveSegment, index: int
-    ) -> Optional[ProfileValidationError]:
+    ) -> ProfileValidationError | None:
         """Return the most fundamental continuity error at the seam (a → b), or None.
 
         Pressure continuity is a prerequisite for a gas switch, so a depth
@@ -600,7 +674,7 @@ class DiveProfile:
         self,
         depth: Pressure | str | float,
         *,
-        rate: Optional[float] = None,
+        rate: float | None = None,
         gas: Gas | str | None = None,
     ) -> DiveProfile:
         """Append a descent from the current position to `depth`.
@@ -632,7 +706,7 @@ class DiveProfile:
         self,
         depth: Pressure | str | float,
         *,
-        rate: Optional[float] = None,
+        rate: float | None = None,
         gas: Gas | str | None = None,
         kind: SegmentKind.Ascent = SegmentKind.ASCENT,
     ) -> DiveProfile:
@@ -787,7 +861,7 @@ class DiveProfile:
         if not skip_simplicity:
             for i, current in enumerate(self._segments[:-1]):
                 next_seg = self._segments[i + 1]
-                if current.is_fully_continuous_with(next_seg):
+                if self._is_mergeable(current, next_seg):
                     errors.append(ProfileSimplicityError(i, current, next_seg))
 
         return tuple(errors)
@@ -935,7 +1009,7 @@ class DiveProfile:
 
         current_merged = self._segments[0]
         for next_seg in self._segments[1:]:
-            if current_merged.is_fully_continuous_with(next_seg):
+            if self._is_mergeable(current_merged, next_seg):
                 current_merged = current_merged.merge_with(next_seg)
             else:
                 simplified.add_segment(current_merged)
@@ -1069,7 +1143,7 @@ class DiveProfile:
         profile._segments = [DiveSegment.from_dict(entry) for entry in data["segments"]]
         return profile
 
-    def to_json(self, path: Optional[str] = None, indent: int = 2) -> str:
+    def to_json(self, path: str | None = None, indent: int = 2) -> str:
         """Serialize to a JSON string, optionally writing to a file."""
         data = json.dumps(self.to_dict(), indent=indent)
         if path:
@@ -1078,9 +1152,7 @@ class DiveProfile:
         return data
 
     @classmethod
-    def from_json(
-        cls, data: Optional[str] = None, path: Optional[str] = None
-    ) -> DiveProfile:
+    def from_json(cls, data: str | None = None, path: str | None = None) -> DiveProfile:
         """Deserialize from a JSON string or file path (see :meth:`from_dict`)."""
         if path:
             with open(path, encoding="utf-8") as f:

@@ -33,9 +33,12 @@ from diveplan.core.dive_segment import DiveSegment, SegmentKind
 from diveplan.core.gas import Gas
 from diveplan.core.pressure import Pressure
 
-# Re-exported as subsequent layers are implemented:
-# from diveplan.planning.gas_plan import GasPlan
-# from diveplan.dive.dive_profile import DiveProfile
+# -- dive / planning layers ------------------------------------------------
+from diveplan.dive.dive import Dive
+from diveplan.dive.dive_profile import DiveProfile
+from diveplan.dive.dive_report import DiveReport
+from diveplan.planning.ascent_plan import plan_ascent
+from diveplan.planning.gas_plan import GasPlan
 
 # -- config proxy --------------------------------------------------------------
 
@@ -58,14 +61,17 @@ class _ConfigProxy:
 
     @property
     def gas(self) -> _GasConfig:
+        """Gas limits and SAC rates of the active config."""
         return DiveConfig.current().gas
 
     @property
     def physics(self) -> _PhysicsConfig:
+        """Physical environment of the active config."""
         return DiveConfig.current().physics
 
     @property
     def planning(self) -> _DivePlanningConfig:
+        """Rates and stop parameters of the active config."""
         return DiveConfig.current().planning
 
     def __repr__(self) -> str:
@@ -90,9 +96,12 @@ __all__ = [
     # configuration
     "DiveConfig",
     "diveconfig",
-    # re-exported as later layers land:
-    # "GasPlan",
-    # "DiveProfile",
+    # dive / planning layers
+    "Dive",
+    "DiveProfile",
+    "DiveReport",
+    "GasPlan",
+    "plan_ascent",
 ]
 
 __version__ = "0.1.0"

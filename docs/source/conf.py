@@ -35,7 +35,9 @@ autodoc_default_options = {
     "show-inheritance": True,
     "member-order": "bysource",
 }
-autodoc_typehints = "description"  # render type hints in the description, not the signature
+autodoc_typehints = (
+    "description"  # render type hints in the description, not the signature
+)
 
 # Google-style docstrings only.
 napoleon_google_docstring = True
