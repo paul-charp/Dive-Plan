@@ -13,7 +13,7 @@ diveplan — dive planning and decompression calculation library.
   - @property `planning(self) -> _DivePlanningConfig`
   dunders: `__repr__, __str__`
 - const `diveconfig = _ConfigProxy()`
-`__all__ = ['Pressure', 'Gas', 'DiveSegment', 'SegmentKind', 'DiveConfig', 'diveconfig', 'DiveProfile', 'DiveReport', 'DiveResult', 'GasPlan', 'plan_ascent']`
+`__all__ = ['Pressure', 'Gas', 'DiveSegment', 'SegmentKind', 'DiveConfig', 'diveconfig', 'Dive', 'DiveProfile', 'DiveReport', 'GasPlan', 'plan_ascent']`
 
 ## `src/diveplan/core/__init__.py`
 Core value objects and configuration for diveplan.
@@ -141,6 +141,32 @@ core/pressure.py — Pressure value type.
 ## `src/diveplan/dive/__init__.py`
 (empty stub)
 
+## `src/diveplan/dive/dive.py`
+Dive: a deco model run over a profile, queryable and extendable.
+`__all__ = ['Dive', 'TtsVariations']`
+### class `TtsVariations` (NamedTuple) — Sensitivity of the time-to-surface to small plan changes — the
+  attrs: `per_meter: timedelta; per_minute: timedelta`
+### class `Dive[StateT: DecoState]` — A deco model's run over a profile — complete or still in progress.
+  `__slots__ = ('_profile', '_model', '_checkpoints')`
+  - `__init__(self, profile: DiveProfile, model: BaseDecoModel[StateT], checkpoints: tuple[StateT, ...])`
+  - @classmethod `run(cls, profile: DiveProfile, model: BaseDecoModel[StateT]) -> 'Dive[StateT]'`  — Integrate `model` over `profile` and capture boundary checkpoints.
+  - @property `profile(self) -> DiveProfile`  — The dive profile this dive was computed from (own copy).
+  - @property `checkpoints(self) -> tuple[StateT, ...]`  — Model states at segment boundaries; ``[0]`` is the pre-dive state,
+  - @property `final_state(self) -> StateT`  — Model state at the end of the profile.
+  - `model_at(self, t: timedelta | float) -> BaseDecoModel[StateT]`  — Independent model instance positioned at runtime `t`.
+  - `state_at(self, t: timedelta | float) -> StateT`  — Model state at runtime `t` (minutes or timedelta).
+  - `ceiling_at(self, t: timedelta | float) -> Pressure`  — Deco ceiling at runtime `t`.
+  - `tissue_series(self, interval: timedelta | float) -> Iterator[tuple[timedelta, StateT]]`  — Yield (time, state) at each sample step — for tissue plots.
+  - `tts(self, t: timedelta | float, gas_plan: GasPlan | None = None) -> timedelta`  — Time-to-surface at runtime `t`: the duration of an ascent planned
+  - `plan_ascent(self, gas_plan: GasPlan | None = None) -> list[DiveSegment]`  — Deco schedule from the dive's current end to the surface.
+  - `extend(self, segments: list[DiveSegment]) -> 'Dive[StateT]'`  — New Dive with `segments` appended and integrated.
+  - `with_ascent(self, gas_plan: GasPlan | None = None) -> 'Dive[StateT]'`  — New Dive completed with its planned deco ascent —
+  - `tts_variations(self, gas_plan: GasPlan | None = None) -> TtsVariations`  — Extra time-to-surface per +1 m on the final segment and per +1 min
+  - `_unique_gases(self) -> list[Gas]`
+  - @property `model_name(self) -> str`  — Registry name of the model this result was computed with.
+  dunders: `__repr__`
+- `_ascent_duration(model: BaseDecoModel[Any], start_pressure: Pressure, gas: Gas, gas_plan: GasPlan, clock_offset: timedelta) -> timedelta`
+
 ## `src/diveplan/dive/dive_profile.py`
 `__all__ = ('DiveProfile', 'ProfileSample', 'ProfileValidationError', 'ProfileContinuityError', 'ProfileSimplicityError', 'ProfileStartEndError', 'ProfileDepthContinuityError', 'ProfileGasContinuityError', 'ProfileEmptyError', 'ProfileTooShortError', 'ProfileBuilderPolicy')`
 ### class `ProfileValidationError` (ValueError) — Base descriptor for a dive profile validation problem.
@@ -239,32 +265,9 @@ Dive report: everything about a computed dive, ready for presentation.
 ### class `DiveReport` — Immutable summary of a computed dive.
   `__slots__ = ('profile', 'model_name', 'rows', 'runtime', 'max_depth', 'consumption_l', 'cns', 'otus', 'rock_bottom_l', 'tts_variations')`
   - `__init__(self, *, profile: DiveProfile, model_name: str, rows: tuple[ReportRow, ...], runtime: timedelta, max_depth: Pressure, consumption_l: tuple[tuple[Gas, float], ...], cns: float, otus: float, rock_bottom_l: float, tts_variations: Optional[TtsVariations])`
-  - @classmethod `from_result(cls, result: DiveResult[DecoState], *, gas_plan: Optional[GasPlan] = None, tts_variations: Optional[TtsVariations] = None) -> 'DiveReport'`  — Assemble a report from a dive result.
+  - @classmethod `from_dive(cls, dive: Dive[DecoState], *, gas_plan: Optional[GasPlan] = None, tts_variations: Optional[TtsVariations] = None) -> 'DiveReport'`  — Assemble a report from a computed dive.
   attrs: `profile: DiveProfile; model_name: str; rows: tuple[ReportRow, ...]; runtime: timedelta; max_depth: Pressure; consumption_l: tuple[tuple[Gas, float], ...]; cns: float; otus: float; rock_bottom_l: float; tts_variations: Optional[TtsVariations]`
   dunders: `__repr__`
-
-## `src/diveplan/dive/dive_result.py`
-Result layer: a deco model run over a profile, queryable by time.
-`__all__ = ['DiveResult', 'TtsVariations']`
-### class `TtsVariations` (NamedTuple) — Sensitivity of the time-to-surface to small plan changes — the
-  attrs: `per_meter: timedelta; per_minute: timedelta`
-### class `DiveResult[StateT: DecoState]` — A deco model's run over a profile: checkpoints + time queries.
-  `__slots__ = ('_profile', '_model', '_checkpoints')`
-  - `__init__(self, profile: DiveProfile, model: BaseDecoModel[StateT], checkpoints: tuple[StateT, ...])`
-  - @classmethod `run(cls, profile: DiveProfile, model: BaseDecoModel[StateT]) -> 'DiveResult[StateT]'`  — Integrate `model` over `profile` and capture boundary checkpoints.
-  - @property `profile(self) -> DiveProfile`  — The dive profile this result was computed from (own copy).
-  - @property `checkpoints(self) -> tuple[StateT, ...]`  — Model states at segment boundaries; ``[0]`` is the pre-dive state,
-  - @property `final_state(self) -> StateT`  — Model state at the end of the profile.
-  - `model_at(self, t: timedelta | float) -> BaseDecoModel[StateT]`  — Independent model instance positioned at runtime `t`.
-  - `state_at(self, t: timedelta | float) -> StateT`  — Model state at runtime `t` (minutes or timedelta).
-  - `ceiling_at(self, t: timedelta | float) -> Pressure`  — Deco ceiling at runtime `t`.
-  - `tissue_series(self, interval: timedelta | float) -> Iterator[tuple[timedelta, StateT]]`  — Yield (time, state) at each sample step — for tissue plots.
-  - `tts(self, t: timedelta | float, gas_plan: GasPlan | None = None) -> timedelta`  — Time-to-surface at runtime `t`: the duration of an ascent planned
-  - `tts_variations(self, gas_plan: GasPlan | None = None) -> TtsVariations`  — Extra time-to-surface per +1 m on the final segment and per +1 min
-  - `_unique_gases(self) -> list[Gas]`
-  - @property `model_name(self) -> str`  — Registry name of the model this result was computed with.
-  dunders: `__repr__`
-- `_ascent_duration(model: BaseDecoModel[Any], start_pressure: Pressure, gas: Gas, gas_plan: GasPlan, clock_offset: timedelta) -> timedelta`
 
 ## `src/diveplan/dive/formatters/__init__.py`
 Report formatters: turn a DiveReport into an output document.
@@ -277,8 +280,9 @@ Report formatters: turn a DiveReport into an output document.
 Plain-text report formatter for terminals and logs.
 `__all__ = ['ConsoleFormatter']`
 - `_minutes(td: timedelta) -> str`
-- `_describe(row: ReportRow) -> str`
+- `_row_line(row: ReportRow) -> str`
 ### class `ConsoleFormatter` (BaseFormatter) — Human-readable dive plan table with a summary block.
+  - @staticmethod `format_schedule(segments: Iterable[DiveSegment]) -> str`  — Render any segment sequence (a profile's or an ascent plan) as a
   - `format(self, report: DiveReport) -> str`
   attrs: `NAME = 'console'`
 
@@ -341,6 +345,7 @@ Shared Bühlmann machinery: gradient factors and Haldane tissue compartments.
 ### class `Gradient` — A gradient-factor pair (Baker GF low/high), as fractions.
   `__slots__ = ('gf_low', 'gf_high')`
   - `__init__(self, gf_low: float, gf_high: float)`
+  - @classmethod `from_str(cls, s: str) -> 'Gradient'`  — Parse the usual GF notation: ``"30/70"``, ``"GF 30/70"``, ``"85/85"``.
   - `factor(self, pressure: Pressure, first_stop_pressure: Pressure) -> float`  — Gradient factor applicable at ``pressure``.
   attrs: `gf_low: float; gf_high: float`
   dunders: `__eq__, __hash__, __repr__, __str__`
@@ -367,7 +372,7 @@ Generic Bühlmann decompression engine.
   dunders: `__delattr__, __eq__, __hash__, __repr__, __setattr__`
 ### class `BuhlmannModel` (BaseDecoModel[BuhlmannState]) — Bühlmann algorithm over a subclass-supplied coefficient table.
   `__slots__ = ('gradient', '_compartments')`
-  - `__init__(self, gradient: Gradient | None = None)`
+  - `__init__(self, gradient: Gradient | str | None = None)`
   - @property `compartment_count(self) -> int`  — Number of tissue compartments in this model's table.
   - `_integrate_model(self, pressure: Pressure, gas: Gas, dt: timedelta) -> None`
   - `_get_deco_state(self) -> BuhlmannState`
@@ -477,10 +482,10 @@ Gas plan: carried gases, selection, consumption, and reserve planning.
 
 # Tests (tests/)
 - `conftest.py` (0 tests)
-- `test_buhlmann.py` (44 tests) — TestGradient, TestCompartmentState, TestCompartmentIntegration, TestCompartmentToleratedPressure, TestZHL16CTables, TestZHL16CModel, MiniBuhlmann, TestBuhlmannFamily, TestZHL16CRegistry
+- `test_buhlmann.py` (47 tests) — TestGradient, TestCompartmentState, TestCompartmentIntegration, TestCompartmentToleratedPressure, TestZHL16CTables, TestZHL16CModel, MiniBuhlmann, TestBuhlmannFamily, TestZHL16CRegistry
 - `test_config.py` (45 tests) — TestSubConfigBase, TestPhysicsConfig, TestGasConfig, TestDivePlanningConfig, TestDiveConfigStructure, TestGlobalDefault, TestContextManager, TestDefaultConfigLoading, TestSerialization
+- `test_dive.py` (24 tests) — TestIterSamples, TestDiveRun, TestDiveQueries, TestDiveContinuation
 - `test_dive_profile.py` (74 tests) — TestDiveProfileBuilder, TestDiveProfileValidation, TestDiveProfileFixes, TestDiveProfileTimeline, TestDiveProfileFluentBuilders, TestDiveProfileSerialization
-- `test_dive_result.py` (20 tests) — TestIterSamples, TestDiveResultRun, TestDiveResultQueries
 - `test_dive_segment.py` (59 tests) — TestDiveSegmentConstruction, TestDiveSegmentProperties, TestDiveSegmentInterpolation, TestDiveSegmentSplitting, TestDiveSegmentMerging, TestDiveSegmentContinuity, TestDiveSegmentIteration, TestDiveSegmentMagicMethods, TestDiveSegmentImmutability, TestDiveSegmentSerialization
 - `test_gas.py` (61 tests) — TestRawConstruction, TestNamedConstructors, TestFromName, TestPartialPressures, TestMod, TestEnd, TestBestMix, TestEqualityAndHash, TestStringRepresentation
 - `test_planning.py` (18 tests) — TestGasPlan, TestPlanAscentNoDeco, TestPlanAscentDeco

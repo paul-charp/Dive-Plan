@@ -21,7 +21,7 @@ from diveplan.core.gas import Gas
 from diveplan.core.pressure import Pressure
 from diveplan.dive.dive_profile import DiveProfile
 from diveplan.dive.dive_report import DiveReport
-from diveplan.dive.dive_result import DiveResult, TtsVariations
+from diveplan.dive.dive import Dive, TtsVariations
 from diveplan.dive.formatters import (
     ConsoleFormatter,
     JsonFormatter,
@@ -166,7 +166,7 @@ class TestOxygenExposure:
 class TestTtsVariations:
     def test_deco_dive_variations_positive_and_sane(self):
         bottom = DiveProfile().descend_to("40 m").stay(25)
-        result = DiveResult.run(bottom, ZHL16C(gradient=Gradient(0.3, 0.7)))
+        result = Dive.run(bottom, ZHL16C(gradient=Gradient(0.3, 0.7)))
         variations = result.tts_variations(GasPlan([AIR, EAN50]))
         assert variations.per_meter >= timedelta(0)
         assert variations.per_minute > timedelta(0)
@@ -183,7 +183,7 @@ def full_dive_report() -> DiveReport:
     bottom = DiveProfile().descend_to("40 m").stay(25)
     gases = GasPlan([AIR, EAN50])
     model = ZHL16C(gradient=Gradient(0.3, 0.7))
-    bottom_result = DiveResult.run(bottom, model)
+    bottom_result = Dive.run(bottom, model)
 
     end = bottom.runtime
     ascent = plan_ascent(
@@ -195,8 +195,8 @@ def full_dive_report() -> DiveReport:
     )
     full = bottom.copy()
     full.add_segments(ascent)
-    full_result = DiveResult.run(full, model)
-    return DiveReport.from_result(
+    full_result = Dive.run(full, model)
+    return DiveReport.from_dive(
         full_result, tts_variations=bottom_result.tts_variations(gases)
     )
 

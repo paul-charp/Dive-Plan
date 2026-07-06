@@ -1,20 +1,21 @@
-"""Result layer: a deco model run over a profile, queryable by time.
+"""Dive: a deco model run over a profile, queryable and extendable.
 
 The profile stays pure input geometry; everything a model computes lands
-here. A :class:`DiveResult` stores model-state **checkpoints at segment
-boundaries** only — O(segments) memory for batch runs — and answers
-time-addressed queries by re-integrating at most one segment from the
-nearest checkpoint (exact, since Haldane integration composes).
+here. A :class:`Dive` may be complete or in progress (just the bottom
+phase) — it stores model-state **checkpoints at segment boundaries** only
+(O(segments) memory for batch runs) and answers time-addressed queries by
+re-integrating at most one segment from the nearest checkpoint (exact,
+since Haldane integration composes).
 
-Queries:
+Queries and operations:
 
-- ``state_at(t)`` — model state at any runtime
-- ``ceiling_at(t)`` — ceiling at any runtime
+- ``state_at(t)`` / ``ceiling_at(t)`` — model state and ceiling at any runtime
 - ``tissue_series(dt)`` — (time, state) samples for visualization
-- ``tts(t)`` — time-to-surface: a counterfactual ascent planned from the
-  state at ``t`` (see :mod:`diveplan.planning.ascent_plan`)
+- ``tts(t)`` — time-to-surface: a counterfactual ascent planned from ``t``
+- ``plan_ascent()`` — the deco schedule from the dive's current end
+- ``with_ascent()`` / ``extend()`` — a new Dive continuing this one
 
-One profile can be run under any number of models/settings and the results
+One profile can be run under any number of models/settings and the dives
 compared — nothing here mutates the profile or the caller's model.
 """
 
@@ -30,7 +31,7 @@ from diveplan.models.base import BaseDecoModel, DecoState
 from diveplan.planning.ascent_plan import plan_ascent
 from diveplan.planning.gas_plan import GasPlan
 
-__all__ = ["DiveResult", "TtsVariations"]
+__all__ = ["Dive", "TtsVariations"]
 
 
 class TtsVariations(NamedTuple):
@@ -41,11 +42,13 @@ class TtsVariations(NamedTuple):
     per_minute: timedelta
 
 
-class DiveResult[StateT: DecoState]:
-    """A deco model's run over a profile: checkpoints + time queries.
+class Dive[StateT: DecoState]:
+    """A deco model's run over a profile — complete or still in progress.
 
-    Build via :meth:`run`. The result owns an independent model copy and a
-    copy of the profile's segment list; neither input is mutated.
+    Build via :meth:`run`. The dive owns an independent model copy and a
+    copy of the profile's segment list; neither input is mutated. Extend an
+    in-progress dive with :meth:`with_ascent` (plan and append the deco
+    schedule) or :meth:`extend` (append arbitrary segments).
     """
 
     __slots__ = ("_profile", "_model", "_checkpoints")
@@ -65,9 +68,7 @@ class DiveResult[StateT: DecoState]:
         self._checkpoints = checkpoints
 
     @classmethod
-    def run(
-        cls, profile: DiveProfile, model: BaseDecoModel[StateT]
-    ) -> "DiveResult[StateT]":
+    def run(cls, profile: DiveProfile, model: BaseDecoModel[StateT]) -> "Dive[StateT]":
         """Integrate `model` over `profile` and capture boundary checkpoints.
 
         The caller's model is copied, not mutated — run the same profile
@@ -86,7 +87,7 @@ class DiveResult[StateT: DecoState]:
 
     @property
     def profile(self) -> DiveProfile:
-        """The dive profile this result was computed from (own copy)."""
+        """The dive profile this dive was computed from (own copy)."""
         return self._profile
 
     @property
@@ -171,6 +172,53 @@ class DiveResult[StateT: DecoState]:
         )
         return sum((s.duration for s in ascent), timedelta(0))
 
+    # ------------------------------------------------------------------
+    # Continuing the dive
+    # ------------------------------------------------------------------
+
+    def plan_ascent(self, gas_plan: GasPlan | None = None) -> list[DiveSegment]:
+        """Deco schedule from the dive's current end to the surface.
+
+        Plans from the end-of-profile model state, depth, and gas, with stop
+        departures aligned to the dive clock. The dive itself is untouched —
+        use :meth:`with_ascent` to get a new Dive that includes the ascent.
+
+        Args:
+            gas_plan: Gases available for the ascent. Defaults to all gases
+                appearing in the profile so far.
+        """
+        end = self._profile.runtime
+        if gas_plan is None:
+            gas_plan = GasPlan(self._unique_gases())
+        return plan_ascent(
+            self.model_at(end),
+            start_pressure=self._profile.pressure_at(end),
+            gas=self._profile.gas_at(end),
+            gas_plan=gas_plan,
+            clock_offset=end,
+        )
+
+    def extend(self, segments: list[DiveSegment]) -> "Dive[StateT]":
+        """New Dive with `segments` appended and integrated.
+
+        Cheap: the existing checkpoints are reused and only the new segments
+        are integrated. The profile's builder policy applies to the new
+        seams; this dive is not modified.
+        """
+        new_profile = self._profile.copy()
+        new_profile.add_segments(segments)
+
+        work = self._model.copy()  # already holds the end-of-profile state
+        checkpoints = list(self._checkpoints)
+        for segment in segments:
+            checkpoints.append(work.integrate_segment(segment))
+        return Dive(new_profile, work, tuple(checkpoints))
+
+    def with_ascent(self, gas_plan: GasPlan | None = None) -> "Dive[StateT]":
+        """New Dive completed with its planned deco ascent —
+        ``dive.extend(dive.plan_ascent(gas_plan))``."""
+        return self.extend(self.plan_ascent(gas_plan))
+
     def tts_variations(self, gas_plan: GasPlan | None = None) -> TtsVariations:
         """Extra time-to-surface per +1 m on the final segment and per +1 min
         of extra time at the current depth (both re-planned, not estimated).
@@ -245,7 +293,7 @@ class DiveResult[StateT: DecoState]:
 
     def __repr__(self) -> str:
         return (
-            f"DiveResult({type(self._model).__name__}, "
+            f"Dive({type(self._model).__name__}, "
             f"{self._profile.segment_count} segments, "
             f"runtime={self._profile.runtime})"
         )

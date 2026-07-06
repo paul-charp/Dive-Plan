@@ -24,7 +24,7 @@ Early development. The **core layer is implemented and tested**:
 | `DiveProfile` — builder, validation & repair, timeline | ✅ |
 | Plugin registry (entry-point deco-model discovery) | ✅ |
 | Deco models — Bühlmann ZHL-16C (GF), VPM-B (pre-CVA) | ✅ |
-| `DiveResult` — checkpoints, `state_at`/`ceiling_at`/`tts(t)` | ✅ |
+| `Dive` — checkpoints, `state_at`/`ceiling_at`/`tts(t)`, `with_ascent` | ✅ |
 | Ascent planner (`plan_ascent`) + `GasPlan` | ✅ |
 | VPM-B critical-volume/Boyle stage, reports, formatters | 🚧 in progress |
 
@@ -110,18 +110,23 @@ profile.to_json(path="dive.json")
 restored = DiveProfile.from_json(path="dive.json")
 ```
 
-Running a deco model over the profile and querying the result:
+Running a deco model over the profile — a `Dive` can be in progress (just
+the bottom phase) and completed with its planned ascent:
 
 ```python
-from diveplan import DiveResult
-from diveplan.models.buhlmann.common import Gradient
+from diveplan import Dive
 from diveplan.models.buhlmann.zhl16 import ZHL16C
 
-result = DiveResult.run(profile, ZHL16C(gradient=Gradient(0.3, 0.7)))
-result.ceiling_at(23).depth_m   # deco ceiling 23 minutes into the dive
-result.tts(23)                  # time-to-surface if ascending right now
-for t, state in result.tissue_series(1):   # tissue loading, 1-min samples
+bottom = DiveProfile().descend_to("40 m").stay(25)
+dive = Dive.run(bottom, ZHL16C(gradient="30/70"))
+
+dive.ceiling_at(23).depth_m   # deco ceiling 23 minutes into the dive
+dive.tts(23)                  # time-to-surface if ascending right now
+for t, state in dive.tissue_series(1):   # tissue loading, 1-min samples
     ...
+
+full = dive.with_ascent()     # new Dive completed with the deco schedule
+full.profile.runtime          # total runtime including stops
 ```
 
 Segments can still be added explicitly (`add_segment`, `insert_segment_at_index`,

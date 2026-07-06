@@ -1,5 +1,5 @@
 """
-Tests for diveplan.dive.dive_result (and DiveProfile.iter_samples).
+Tests for diveplan.dive.dive (Dive) (and DiveProfile.iter_samples).
 
 Key invariants: iter_samples steps tile the runtime exactly and never cross
 segment boundaries; running a model through iter_samples reproduces
@@ -12,8 +12,9 @@ from datetime import timedelta
 import pytest
 
 from diveplan.core.gas import Gas
+from diveplan.core.pressure import Pressure
 from diveplan.dive.dive_profile import DiveProfile
-from diveplan.dive.dive_result import DiveResult
+from diveplan.dive.dive import Dive
 from diveplan.models.buhlmann.common import Gradient
 from diveplan.models.buhlmann.zhl16 import ZHL16C
 from diveplan.models.vpm.model import VpmB
@@ -113,14 +114,14 @@ class TestIterSamples:
 
 
 # ------------------------------------------------------------------
-# DiveResult
+# Dive
 # ------------------------------------------------------------------
 
 
-class TestDiveResultRun:
+class TestDiveRun:
     def test_checkpoint_shape(self):
         profile = simple_profile()
-        result = DiveResult.run(profile, ZHL16C())
+        result = Dive.run(profile, ZHL16C())
         assert len(result.checkpoints) == profile.segment_count + 1
         assert result.checkpoints[0] == ZHL16C().get_state()  # pre-dive
         assert result.final_state == result.checkpoints[-1]
@@ -130,27 +131,27 @@ class TestDiveResultRun:
         model = ZHL16C()
         before = model.get_state()
         segment_count = profile.segment_count
-        DiveResult.run(profile, model)
+        Dive.run(profile, model)
         assert model.get_state() == before
         assert profile.segment_count == segment_count
 
     def test_result_profile_is_a_copy(self):
         profile = simple_profile()
-        result = DiveResult.run(profile, ZHL16C())
+        result = Dive.run(profile, ZHL16C())
         assert result.profile is not profile
         assert result.profile.segments == profile.segments
 
     def test_generic_over_models(self):
         profile = simple_profile()
         for model in (ZHL16C(gradient=Gradient(0.3, 0.85)), VpmB(conservatism=1)):
-            result = DiveResult.run(profile, model)
+            result = Dive.run(profile, model)
             assert len(result.checkpoints) == profile.segment_count + 1
 
 
-class TestDiveResultQueries:
+class TestDiveQueries:
     def test_state_at_boundaries_equals_checkpoints(self):
         profile = simple_profile()
-        result = DiveResult.run(profile, ZHL16C())
+        result = Dive.run(profile, ZHL16C())
         assert result.state_at(0) == result.checkpoints[0]
         assert result.state_at(profile.runtime) == result.final_state
 
@@ -158,7 +159,7 @@ class TestDiveResultQueries:
         # state_at re-integrates from the checkpoint; compare against a
         # model integrated directly to the same instant.
         profile = simple_profile()
-        result = DiveResult.run(profile, ZHL16C())
+        result = Dive.run(profile, ZHL16C())
         t = profile.start_time_of_segment(1) + timedelta(minutes=7)
 
         direct = ZHL16C()
@@ -178,7 +179,7 @@ class TestDiveResultQueries:
 
     def test_ceiling_rises_with_bottom_time(self):
         profile = simple_profile()
-        result = DiveResult.run(profile, ZHL16C())
+        result = Dive.run(profile, ZHL16C())
         bottom_start = profile.start_time_of_segment(1)
         early = result.ceiling_at(bottom_start + timedelta(minutes=2))
         late = result.ceiling_at(bottom_start + timedelta(minutes=19))
@@ -186,7 +187,7 @@ class TestDiveResultQueries:
 
     def test_tissue_series_shape(self):
         profile = simple_profile()
-        result = DiveResult.run(profile, ZHL16C())
+        result = Dive.run(profile, ZHL16C())
         series = list(result.tissue_series(timedelta(minutes=1)))
         assert series[0][0] == timedelta(0)
         assert series[0][1] == result.checkpoints[0]
@@ -198,7 +199,7 @@ class TestDiveResultQueries:
         # same step size — coarser sampling is approximate by design).
         profile = simple_profile()
         model = ZHL16C()
-        result = DiveResult.run(profile, model)
+        result = Dive.run(profile, model)
         series = list(
             result.tissue_series(timedelta(seconds=model.sample_rate_seconds))
         )
@@ -210,7 +211,7 @@ class TestDiveResultQueries:
 
     def test_queries_do_not_mutate_result(self):
         profile = simple_profile()
-        result = DiveResult.run(profile, ZHL16C())
+        result = Dive.run(profile, ZHL16C())
         final_before = result.final_state
         result.state_at(5)
         result.ceiling_at(15)
@@ -221,7 +222,7 @@ class TestDiveResultQueries:
         from diveplan.core.config import DiveConfig
 
         profile = DiveProfile().descend_to("12 m").stay(10).surface()
-        result = DiveResult.run(profile, ZHL16C())
+        result = Dive.run(profile, ZHL16C())
         t = profile.start_time_of_segment(1) + timedelta(minutes=5)
         expected = timedelta(minutes=12 / DiveConfig.current().planning.ascent_rate)
         assert abs(result.tts(t) - expected) < timedelta(seconds=5)
@@ -234,9 +235,60 @@ class TestDiveResultQueries:
             .stay(30)
             .surface()
         )
-        result = DiveResult.run(profile, ZHL16C(gradient=Gradient(0.3, 0.7)))
+        result = Dive.run(profile, ZHL16C(gradient=Gradient(0.3, 0.7)))
         bottom_start = profile.start_time_of_segment(1)
         early = result.tts(bottom_start + timedelta(minutes=5))
         late = result.tts(bottom_start + timedelta(minutes=25))
         assert late > early
         assert late > timedelta(minutes=10)  # real deco obligation
+
+
+# ------------------------------------------------------------------
+# Continuing a dive: plan_ascent / extend / with_ascent
+# ------------------------------------------------------------------
+
+
+class TestDiveContinuation:
+    def make_bottom_dive(self):
+        from diveplan.planning.gas_plan import GasPlan
+
+        bottom = DiveProfile().descend_to("40 m").stay(25)
+        dive = Dive.run(bottom, ZHL16C(gradient=Gradient(0.3, 0.7)))
+        return dive, GasPlan(["air", "ean50"])
+
+    def test_plan_ascent_reaches_surface(self):
+        dive, gases = self.make_bottom_dive()
+        ascent = dive.plan_ascent(gases)
+        assert ascent[0].start_pressure == Pressure.from_depth_m(40)
+        assert ascent[-1].end_pressure == Pressure.surface()
+
+    def test_extend_appends_and_reuses_checkpoints(self):
+        dive, gases = self.make_bottom_dive()
+        ascent = dive.plan_ascent(gases)
+        full = dive.extend(ascent)
+
+        # Original dive untouched; new dive covers everything.
+        assert dive.profile.segment_count == 2
+        assert full.profile.segment_count == 2 + len(ascent)
+        assert len(full.checkpoints) == full.profile.segment_count + 1
+        assert full.checkpoints[: len(dive.checkpoints)] == dive.checkpoints
+
+    def test_extend_equivalent_to_fresh_run(self):
+        dive, gases = self.make_bottom_dive()
+        full = dive.with_ascent(gases)
+        rerun = Dive.run(full.profile, ZHL16C(gradient=Gradient(0.3, 0.7)))
+        for (a_n2, a_he), (b_n2, b_he) in zip(
+            full.final_state.tissues, rerun.final_state.tissues, strict=True
+        ):
+            assert a_n2 == pytest.approx(b_n2, rel=1e-9)
+            assert a_he == pytest.approx(b_he, rel=1e-9)
+
+    def test_with_ascent_surfaces_clean(self):
+        dive, gases = self.make_bottom_dive()
+        full = dive.with_ascent(gases)
+        assert full.profile.segments[-1].end_pressure == Pressure.surface()
+        # At surfacing the GF-high ceiling must clear the surface (that is
+        # the planner's criterion; the default get_ceiling() is the
+        # conservative GF-low bound and legitimately does not).
+        surfaced = full.model_at(full.profile.runtime)
+        assert surfaced.get_ceiling(0.7) <= Pressure.surface()

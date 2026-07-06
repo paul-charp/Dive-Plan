@@ -1,6 +1,6 @@
 """Dive report: everything about a computed dive, ready for presentation.
 
-:class:`DiveReport` is pure data assembled from a :class:`DiveResult` — the
+:class:`DiveReport` is pure data assembled from a :class:`~diveplan.dive.dive.Dive` — the
 schedule rows plus derived figures (gas consumption, CNS/OTU, rock bottom,
 TTS variations). Formatters (`diveplan.dive.formatters`) turn a report into
 console text, JSON, or a Subsurface dive log; they never touch models or
@@ -13,7 +13,7 @@ from typing import NamedTuple, Optional
 from diveplan.core.gas import Gas
 from diveplan.core.pressure import Pressure
 from diveplan.dive.dive_profile import DiveProfile
-from diveplan.dive.dive_result import DiveResult, TtsVariations
+from diveplan.dive.dive import Dive, TtsVariations
 from diveplan.dive.oxygen import cns_percent, otu
 from diveplan.models.base import DecoState
 from diveplan.planning.gas_plan import GasPlan, gas_consumption, rock_bottom
@@ -35,7 +35,7 @@ class ReportRow(NamedTuple):
 class DiveReport:
     """Immutable summary of a computed dive.
 
-    Build via :meth:`from_result`. Holds the schedule and the derived
+    Build via :meth:`from_dive`. Holds the schedule and the derived
     numbers; formatting belongs to `diveplan.dive.formatters`.
     """
 
@@ -89,26 +89,26 @@ class DiveReport:
         self.tts_variations = tts_variations
 
     @classmethod
-    def from_result(
+    def from_dive(
         cls,
-        result: DiveResult[DecoState],
+        dive: Dive[DecoState],
         *,
         gas_plan: Optional[GasPlan] = None,
         tts_variations: Optional[TtsVariations] = None,
     ) -> "DiveReport":
-        """Assemble a report from a dive result.
+        """Assemble a report from a computed dive.
 
         Args:
-            result: The computed dive (normally over the *full* profile,
-                bottom + planned ascent).
+            dive: The computed dive (normally the *full* dive, bottom plus
+                planned ascent — see :meth:`Dive.with_ascent`).
             gas_plan: Unused for consumption (which follows the profile's
                 own gases) — reserved for future reserve summaries.
             tts_variations: The "+1 m / +1 min" figures. They are meaningful
-                for a *bottom-phase* profile, so compute them on the bottom
-                result (``bottom_result.tts_variations()``) and pass them
-                here; a report over a full dive cannot derive them itself.
+                for a *bottom-phase* dive, so compute them on the bottom
+                dive (``bottom.tts_variations()``) and pass them here; a
+                report over a full dive cannot derive them itself.
         """
-        profile = result.profile
+        profile = dive.profile
         segments = profile.segments
 
         rows: list[ReportRow] = []
@@ -133,7 +133,7 @@ class DiveReport:
 
         return cls(
             profile=profile,
-            model_name=result.model_name,
+            model_name=dive.model_name,
             rows=tuple(rows),
             runtime=profile.runtime,
             max_depth=max_pressure,

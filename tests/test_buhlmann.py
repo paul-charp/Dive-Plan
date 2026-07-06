@@ -94,6 +94,19 @@ class TestGradient:
     def test_str(self):
         assert str(Gradient(0.3, 0.85)) == "GF 30/85"
 
+    def test_from_str(self):
+        assert Gradient.from_str("30/70") == Gradient(0.3, 0.7)
+        assert Gradient.from_str("GF 85/85") == Gradient(0.85, 0.85)
+        assert Gradient.from_str(" 100 / 100 ") == Gradient(1.0, 1.0)
+
+    def test_from_str_invalid(self):
+        with pytest.raises(ValueError, match="low/high"):
+            Gradient.from_str("30-70")
+        with pytest.raises(ValueError):
+            Gradient.from_str("thirty/seventy")
+        with pytest.raises(ValueError):  # zero factor rejected by Gradient
+            Gradient.from_str("0/85")
+
 
 # ------------------------------------------------------------------
 # Compartment
@@ -239,6 +252,11 @@ class TestZHL16CModel:
     def test_sample_rate_from_config(self):
         DiveConfig.current().planning.sample_rate_s = 4
         assert ZHL16C().sample_rate_seconds == 4
+
+    def test_gradient_accepts_string_notation(self):
+        assert ZHL16C(gradient="30/70").gradient == Gradient(0.3, 0.7)
+        assert ZHL16C(gradient=Gradient(0.3, 0.7)).gradient == Gradient(0.3, 0.7)
+        assert ZHL16C().gradient == Gradient(1.0, 1.0)
 
     def test_no_deco_short_shallow_dive(self):
         # 12 m for 10 min on air is far inside any no-stop limit.

@@ -80,7 +80,8 @@ class BuhlmannModel(BaseDecoModel[BuhlmannState]):
     read from ``DiveConfig.current().planning.sample_rate_s`` at construction.
 
     Args:
-        gradient: GF pair; defaults to ``Gradient(1.0, 1.0)`` (raw Bühlmann).
+        gradient: GF pair — a :class:`Gradient` or the usual string notation
+            (``"30/70"``, percentages). Defaults to raw Bühlmann (GF 100/100).
     """
 
     # Coefficient tables — supplied by concrete subclasses.
@@ -115,7 +116,7 @@ class BuhlmannModel(BaseDecoModel[BuhlmannState]):
         if 0 in lengths.values():
             raise TypeError(f"{cls.__name__} coefficient tables are empty.")
 
-    def __init__(self, gradient: Gradient | None = None):
+    def __init__(self, gradient: Gradient | str | None = None):
         if not hasattr(type(self), "N2_HALF_TIMES"):
             raise TypeError(
                 "BuhlmannModel is an abstract engine — instantiate a concrete "
@@ -123,7 +124,12 @@ class BuhlmannModel(BaseDecoModel[BuhlmannState]):
             )
         super().__init__()
         self.sample_rate_seconds = DiveConfig.current().planning.sample_rate_s
-        self.gradient = gradient if gradient is not None else Gradient(1.0, 1.0)
+        if gradient is None:
+            self.gradient = Gradient(1.0, 1.0)
+        elif isinstance(gradient, str):
+            self.gradient = Gradient.from_str(gradient)
+        else:
+            self.gradient = gradient
         self._compartments = [
             Compartment(
                 ht_n2=self.N2_HALF_TIMES[i],

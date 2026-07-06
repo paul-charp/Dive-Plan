@@ -1,13 +1,13 @@
-"""Complete diveplan walkthrough — plan a 40 m trimix-free deco dive on air
-with an EAN50 deco gas, end to end.
+"""Complete diveplan walkthrough — plan a 40 m deco dive on air with an
+EAN50 deco gas, end to end.
 
 Run from the repo root:
 
     uv run python examples/complete_dive_plan.py
 
 Covers: configuration, gases, fluent profile building, running deco models,
-result queries (ceiling, TTS, tissue loading), ascent planning, model
-comparison, and JSON serialization.
+dive queries (ceiling, TTS, tissue loading), ascent planning, model
+comparison, serialization, and reporting.
 
 DO NOT USE FOR REAL-WORLD DIVE PLANNING — experimental software.
 """
@@ -15,37 +15,26 @@ DO NOT USE FOR REAL-WORLD DIVE PLANNING — experimental software.
 from datetime import timedelta
 
 from diveplan import (
+    Dive,
     DiveConfig,
     DiveProfile,
-    DiveResult,
+    DiveReport,
     Gas,
     GasPlan,
     Pressure,
-    plan_ascent,
 )
-from diveplan.core.dive_segment import DiveSegment, SegmentKind
-from diveplan.models.buhlmann.common import Gradient
+from diveplan.core.dive_segment import SegmentKind
+from diveplan.dive.formatters import (
+    ConsoleFormatter,
+    JsonFormatter,
+    SubsurfaceXmlFormatter,
+)
 from diveplan.models.buhlmann.zhl16 import ZHL16C
 from diveplan.models.vpm.model import VpmB
 
 
 def minutes(td: timedelta) -> str:
     return f"{td.total_seconds() / 60:5.1f} min"
-
-
-def describe(segment: DiveSegment, runtime: timedelta) -> str:
-    depth_from = segment.start_pressure.depth_m
-    depth_to = segment.end_pressure.depth_m
-    if segment.kind is SegmentKind.Constant.GAS_SWITCH:
-        what = f"switch to {segment.gas}"
-    elif depth_from == depth_to:
-        what = f"hold {depth_from:4.0f} m"
-    else:
-        what = f"{depth_from:4.0f} m -> {depth_to:3.0f} m"
-    return (
-        f"  {minutes(runtime):>9}  {what:<22} {minutes(segment.duration):>9}"
-        f"   {segment.gas.name:<6} {segment.kind.name}"
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -76,7 +65,7 @@ print(
 print()
 
 # ---------------------------------------------------------------------------
-# 2. Gases — named constructors, parsing, limits, best mix
+# 2. Gases — names, limits, best mix
 # ---------------------------------------------------------------------------
 print("=== 2. Gases ===")
 
@@ -106,53 +95,38 @@ print(
 print()
 
 # ---------------------------------------------------------------------------
-# 4. Run a deco model over it and query the result
+# 4. Run a deco model: a Dive — still in progress at this point
 # ---------------------------------------------------------------------------
-print("=== 4. DiveResult queries (ZHL-16C, GF 30/70) ===")
+print("=== 4. Dive queries (ZHL-16C, GF 30/70) ===")
 
-zhl = ZHL16C(gradient=Gradient(0.3, 0.7))
-carried = GasPlan(["air", "ean50"])  # gases by name, like everywhere else
-
-result = DiveResult.run(bottom, zhl)
+carried = GasPlan(["air", "ean50"])
+dive = Dive.run(bottom, ZHL16C(gradient="30/70"))
 
 for t in (5, 15, bottom.runtime):
-    ceiling = result.ceiling_at(t)
+    ceiling = dive.ceiling_at(t)
     depth = max(0.0, ceiling.depth_m)
     label = minutes(t if isinstance(t, timedelta) else timedelta(minutes=t))
     print(
         f"t={label}: ceiling {depth:4.1f} m   "
-        f"TTS {minutes(result.tts(t, gas_plan=carried))}"
+        f"TTS {minutes(dive.tts(t, gas_plan=carried))}"
     )
 
 # Tissue loading over time (leading compartment) — feed this to a plot:
 print("leading-compartment N2 tension (mbar):")
-for t, state in result.tissue_series(timedelta(minutes=9)):
+for t, state in dive.tissue_series(timedelta(minutes=9)):
     print(f"  t={minutes(t)}: {state.tissues[0][0]:6.0f}")
 print()
 
 # ---------------------------------------------------------------------------
-# 5. Plan the deco ascent and assemble the full dive
+# 5. Complete the dive with its planned deco ascent
 # ---------------------------------------------------------------------------
 print("=== 5. Ascent plan ===")
 
-end = bottom.runtime
-ascent = plan_ascent(
-    result.model_at(end),  # model positioned at end of bottom time
-    start_pressure=bottom.pressure_at(end),
-    gas=bottom.gas_at(end),
-    gas_plan=carried,
-    clock_offset=end,  # stop departures on whole minutes of dive runtime
-)
+ascent = dive.plan_ascent(carried)  # the deco schedule as segments
+full_dive = dive.extend(ascent)  # or in one step: dive.with_ascent(carried)
 
-full_dive = bottom.copy()
-full_dive.add_segments(ascent)  # seams stay policy-checked
-
-print("runtime    action                  duration   gas    kind")
-elapsed = timedelta(0)
-for segment in full_dive.segments:
-    print(describe(segment, elapsed))
-    elapsed += segment.duration
-print(f"total runtime : {minutes(full_dive.runtime)}")
+print(ConsoleFormatter.format_schedule(full_dive.profile.segments))
+print(f"total runtime : {minutes(full_dive.profile.runtime)}")
 deco_time = sum(
     (s.duration for s in ascent if s.kind is SegmentKind.Constant.STOP),
     timedelta(0),
@@ -161,20 +135,19 @@ print(f"total stops   : {minutes(deco_time)}")
 print()
 
 # ---------------------------------------------------------------------------
-# 6. Same dive, different models — the point of the result layer
+# 6. Same dive, different models — the point of the Dive layer
 # ---------------------------------------------------------------------------
 print("=== 6. Model comparison (same bottom, EAN50 carried) ===")
 
 candidates = [
     ("ZHL-16C raw", ZHL16C()),
-    ("ZHL-16C GF 30/70", ZHL16C(gradient=Gradient(0.3, 0.7))),
-    ("ZHL-16C GF 85/85", ZHL16C(gradient=Gradient(0.85, 0.85))),
+    ("ZHL-16C GF 30/70", ZHL16C(gradient="30/70")),
+    ("ZHL-16C GF 85/85", ZHL16C(gradient="85/85")),
     ("VPM-B +0 (pre-CVA)", VpmB(conservatism=0)),
     ("VPM-B +3 (pre-CVA)", VpmB(conservatism=3)),
 ]
 for name, model in candidates:
-    res = DiveResult.run(bottom, model)
-    tts = res.tts(bottom.runtime, gas_plan=carried)
+    tts = Dive.run(bottom, model).tts(bottom.runtime, gas_plan=carried)
     print(f"  {name:<20} TTS at end of bottom: {minutes(tts)}")
 print()
 
@@ -183,9 +156,9 @@ print()
 # ---------------------------------------------------------------------------
 print("=== 7. Serialization ===")
 
-payload = full_dive.to_json()
+payload = full_dive.profile.to_json()
 restored = DiveProfile.from_json(payload)
-assert restored.segments == full_dive.segments
+assert restored.segments == full_dive.profile.segments
 print(f"JSON round-trip OK ({len(payload)} bytes, {restored.segment_count} segments)")
 print()
 
@@ -194,19 +167,11 @@ print()
 # ---------------------------------------------------------------------------
 print("=== 8. Dive report ===")
 
-from diveplan import DiveReport  # noqa: E402
-from diveplan.dive.formatters import (  # noqa: E402
-    ConsoleFormatter,
-    JsonFormatter,
-    SubsurfaceXmlFormatter,
-)
-
-full_result = DiveResult.run(full_dive, zhl)
-report = DiveReport.from_result(
-    full_result,
+report = DiveReport.from_dive(
+    full_dive,
     # The "+1 m / +1 min" figures describe the *bottom* plan, so they are
-    # computed on the bottom result and handed to the report.
-    tts_variations=result.tts_variations(carried),
+    # computed on the in-progress dive and handed to the report.
+    tts_variations=dive.tts_variations(carried),
 )
 
 print(ConsoleFormatter().format(report))

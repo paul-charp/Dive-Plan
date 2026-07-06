@@ -1,18 +1,22 @@
 """Plain-text report formatter for terminals and logs."""
 
+from collections.abc import Iterable
 from datetime import timedelta
 
+from diveplan.core.dive_segment import DiveSegment
 from diveplan.dive.dive_report import DiveReport, ReportRow
 from diveplan.dive.formatters import BaseFormatter
 
 __all__ = ["ConsoleFormatter"]
+
+_SCHEDULE_HEADER = "  runtime     action                  duration   gas    kind"
 
 
 def _minutes(td: timedelta) -> str:
     return f"{td.total_seconds() / 60:6.1f} min"
 
 
-def _describe(row: ReportRow) -> str:
+def _row_line(row: ReportRow) -> str:
     if row.kind == "GAS_SWITCH":
         action = f"switch to {row.gas}"
     elif row.start_depth_m == row.end_depth_m:
@@ -31,6 +35,26 @@ class ConsoleFormatter(BaseFormatter):
 
     NAME = "console"
 
+    @staticmethod
+    def format_schedule(segments: Iterable[DiveSegment]) -> str:
+        """Render any segment sequence (a profile's or an ascent plan) as a
+        runtime table — reusable outside full reports."""
+        rows: list[ReportRow] = []
+        elapsed = timedelta(0)
+        for segment in segments:
+            elapsed += segment.duration
+            rows.append(
+                ReportRow(
+                    runtime=elapsed,
+                    start_depth_m=segment.start_pressure.depth_m,
+                    end_depth_m=segment.end_pressure.depth_m,
+                    duration=segment.duration,
+                    gas=segment.gas,
+                    kind=segment.kind.name,
+                )
+            )
+        return "\n".join([_SCHEDULE_HEADER, *map(_row_line, rows)])
+
     def format(self, report: DiveReport) -> str:
         lines = [
             f"Dive plan — {report.model_name}",
@@ -44,8 +68,8 @@ class ConsoleFormatter(BaseFormatter):
                 f"TTS variation: +{per_m / 60:.1f} min/m, +{per_min / 60:.1f} min/min"
             )
         lines.append("")
-        lines.append("  runtime     action                  duration   gas    kind")
-        lines.extend(_describe(row) for row in report.rows)
+        lines.append(_SCHEDULE_HEADER)
+        lines.extend(_row_line(row) for row in report.rows)
         lines.append("")
 
         for gas, litres in report.consumption_l:

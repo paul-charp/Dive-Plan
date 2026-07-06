@@ -53,6 +53,29 @@ class Gradient:
         self.gf_low = gf_low
         self.gf_high = gf_high
 
+    @classmethod
+    def from_str(cls, s: str) -> "Gradient":
+        """Parse the usual GF notation: ``"30/70"``, ``"GF 30/70"``, ``"85/85"``.
+
+        Numbers are percentages (the way divers write them); ``"100/100"``
+        is raw Bühlmann.
+
+        Raises:
+            ValueError: If the string is not two /-separated numbers.
+        """
+        text = s.strip().lower().removeprefix("gf").strip()
+        parts = text.split("/")
+        if len(parts) != 2:
+            raise ValueError(
+                f"Cannot parse gradient factors from {s!r} — expected 'low/high' "
+                f"percentages like '30/70'."
+            )
+        try:
+            low, high = (float(p.strip()) for p in parts)
+        except ValueError:
+            raise ValueError(f"Cannot parse gradient factors from {s!r}.") from None
+        return cls(low / 100.0, high / 100.0)
+
     def __repr__(self) -> str:
         return f"Gradient(gf_low={self.gf_low}, gf_high={self.gf_high})"
 
