@@ -57,6 +57,14 @@ pip install -e ".[dev]"
 
 ## Quickstart
 
+A complete end-to-end walkthrough (config → gases → profile → models →
+result queries → ascent plan → serialization) lives in
+[`examples/complete_dive_plan.py`](examples/complete_dive_plan.py):
+
+```bash
+uv run python examples/complete_dive_plan.py
+```
+
 ```python
 from diveplan import Pressure, Gas, DiveConfig
 
