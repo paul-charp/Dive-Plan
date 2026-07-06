@@ -93,7 +93,6 @@ Plugin discovery: entry-point group **`diveplan.deco_models`** (single source of
 
 ### Known state / gotchas
 
-- The Subsurface XML formatter is experimental — validated structurally, not yet round-tripped through a real Subsurface import.
 - VPM-B CVA + Boyle compensation pending in the planner (see above).
 - `diveplan_roadmap.md` predates implementation and drifts from the code in places (e.g. `DiveStep`/`AbstractDecoModel` naming — the code's `DiveSegment`/`BaseDecoModel` won); trust the code.
 - `__init__.py` re-exports core types, `Dive`, `DiveProfile`, `GasPlan`, `plan_ascent`, and a `diveconfig` proxy.

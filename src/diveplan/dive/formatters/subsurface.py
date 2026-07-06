@@ -1,10 +1,10 @@
-"""Subsurface dive-log XML formatter (experimental).
+"""Subsurface dive-log XML formatter.
 
 Emits a minimal Subsurface-compatible dive log: one dive with cylinders
 (one per gas), a planned-dive computer with depth samples and gas-change
-events. Written against Subsurface's XML dive-log format as of v6; treat
-as experimental until round-tripped through your Subsurface version —
-the importer is lenient, but the format is theirs, not a public standard.
+events. Written against Subsurface's XML dive-log format and verified by
+importing into Subsurface 6.0; the format is theirs, not a public
+standard, so re-verify after major Subsurface releases.
 """
 
 from datetime import datetime, timedelta
