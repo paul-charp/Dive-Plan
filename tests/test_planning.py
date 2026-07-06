@@ -200,6 +200,28 @@ class TestPlanAscentDeco:
         assert GasPlan.is_breathable(EAN50, switches[0].start_pressure)
         assert_plan_well_formed(with_deco_gas, Pressure.from_depth_m(40))
 
+    def test_stop_departures_align_to_dive_clock(self):
+        # Dive-table convention (matches Subsurface): stops are extended so
+        # that departures land on whole min_stop_time boundaries of the dive
+        # clock, even though ascent legs arrive at fractional times.
+        bottom_runtime = timedelta(minutes=27)
+        model = loaded_model(40, 25, Gradient(0.3, 0.7))
+        plan = plan_ascent(
+            model,
+            Pressure.from_depth_m(40),
+            AIR,
+            gas_plan=GasPlan([AIR, EAN50]),
+            clock_offset=bottom_runtime,
+        )
+        elapsed = bottom_runtime
+        for segment in plan:
+            elapsed += segment.duration
+            if segment.kind is SegmentKind.Constant.STOP:
+                departure_s = elapsed.total_seconds()
+                assert departure_s % 60 == pytest.approx(0, abs=0.51) or (
+                    60 - departure_s % 60
+                ) < 0.51
+
     def test_vpm_plan_terminates_and_is_well_formed(self):
         model = VpmB()
         p30 = Pressure.from_depth_m(30)

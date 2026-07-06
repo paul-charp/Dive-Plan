@@ -140,6 +140,7 @@ ascent = plan_ascent(
     start_pressure=bottom.pressure_at(end),
     gas=bottom.gas_at(end),
     gas_plan=carried,
+    clock_offset=end,  # stop departures on whole minutes of dive runtime
 )
 
 full_dive = bottom.copy()

@@ -78,6 +78,7 @@ def plan_ascent(
     start_pressure: Pressure,
     gas: Gas,
     gas_plan: Optional[GasPlan] = None,
+    clock_offset: timedelta | float = timedelta(0),
 ) -> list[DiveSegment]:
     """Plan the decompression ascent from the given position and model state.
 
@@ -88,6 +89,13 @@ def plan_ascent(
         gas: Gas currently being breathed.
         gas_plan: Gases available for switches during the ascent. Defaults
             to just the current gas.
+        clock_offset: Dive runtime at which this ascent starts (minutes or
+            timedelta). Stop departures are extended to whole multiples of
+            ``min_stop_time_s`` on this clock — the dive-table convention
+            (a stop ends at e.g. runtime 31:00, not 30:26), which keeps
+            schedules comparable with planners like Subsurface. Pass the
+            bottom runtime when planning a real dive; the default plans on
+            an ascent-relative clock.
 
     Returns:
         Continuous segments from `start_pressure` to the surface: deco
@@ -103,12 +111,27 @@ def plan_ascent(
 
     if gas_plan is None:
         gas_plan = GasPlan([gas])
+    if not isinstance(clock_offset, timedelta):
+        clock_offset = timedelta(minutes=clock_offset)
 
     work = model.copy()
     current = start_pressure
     current_gas = gas
     first_stop: Optional[Pressure] = None
     plan: list[DiveSegment] = []
+
+    def runtime_now() -> timedelta:
+        return clock_offset + sum((s.duration for s in plan), timedelta(0))
+
+    def wait_duration() -> timedelta:
+        """Wait until the next whole stop-time boundary on the dive clock."""
+        increment = float(planning.min_stop_time_s)
+        into_increment = runtime_now().total_seconds() % increment
+        remaining = increment - into_increment
+        # Already (numerically) on a boundary: wait a full increment.
+        if remaining < 0.5:
+            remaining += increment
+        return timedelta(seconds=remaining)
 
     def integrate_and_append(segment: DiveSegment) -> None:
         work.integrate_segment(segment)
@@ -172,7 +195,7 @@ def plan_ascent(
         chunk = DiveSegment(
             current,
             current,
-            timedelta(seconds=planning.min_stop_time_s),
+            wait_duration(),
             current_gas,
             constant_kind=SegmentKind.Constant.STOP,
         )

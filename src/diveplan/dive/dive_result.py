@@ -158,6 +158,7 @@ class DiveResult[StateT: DecoState]:
             start_pressure=self._profile.pressure_at(t),
             gas=self._profile.gas_at(t),
             gas_plan=gas_plan,
+            clock_offset=t,  # stop departures align to the dive clock
         )
         return sum((s.duration for s in ascent), timedelta(0))
 
