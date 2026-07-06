@@ -13,7 +13,7 @@ simulations comparing algorithms, gases, and conditions.
 
 ## Status
 
-Early development. The **core layer is implemented and tested**:
+Early development — **all layers below are implemented and tested** (458 tests, strict mypy):
 
 | Component | Status |
 |---|---|
@@ -26,7 +26,9 @@ Early development. The **core layer is implemented and tested**:
 | Deco models — Bühlmann ZHL-16C (GF), VPM-B (pre-CVA) | ✅ |
 | `Dive` — checkpoints, `state_at`/`ceiling_at`/`tts(t)`, `with_ascent` | ✅ |
 | Ascent planner (`plan_ascent`) + `GasPlan` | ✅ |
-| VPM-B critical-volume/Boyle stage, reports, formatters | 🚧 in progress |
+| `DiveReport` + formatters (console, JSON, Subsurface XML) | ✅ |
+| Gas consumption, rock bottom, CNS/OTU, TTS variations | ✅ |
+| VPM-B critical-volume/Boyle stage | 🚧 in progress |
 
 ## Design principles
 
@@ -57,9 +59,14 @@ pip install -e ".[dev]"
 
 ## Quickstart
 
-A complete end-to-end walkthrough (config → gases → profile → models →
-result queries → ascent plan → serialization) lives in
-[`examples/complete_dive_plan.py`](examples/complete_dive_plan.py):
+Runnable, commented examples live in [`examples/`](examples/):
+
+| Example | Shows |
+|---|---|
+| [`complete_dive_plan.py`](examples/complete_dive_plan.py) | The full workflow: config, gases, profile, Dive, ascent, report, formatters |
+| [`batch_model_comparison.py`](examples/batch_model_comparison.py) | TTS grids across depths/times/models, incl. an altitude/fresh-water override |
+| [`custom_deco_model.py`](examples/custom_deco_model.py) | Writing and registering your own (Bühlmann-family) deco model |
+| [`tissue_loading_chart.py`](examples/tissue_loading_chart.py) | Dependency-free visualization of depth, ceiling, and tissue loading |
 
 ```bash
 uv run python examples/complete_dive_plan.py
@@ -156,11 +163,11 @@ defaults (useful in CI and tests). Overrides apply via `DiveConfig.set_default()
 ```
 src/diveplan/
 ├── core/        # value objects + config (Pressure, Gas, DiveSegment, DiveConfig)
-├── dive/        # DiveProfile, reports, formatters
-├── models/      # deco models (ZHL-16C) + helpers
-├── planning/    # ascent planner, gas plan
-├── utils/       # conversions
-└── registry.py  # entry-point plugin discovery
+├── dive/        # DiveProfile, Dive, DiveReport, oxygen exposure, formatters
+├── models/      # deco models: Bühlmann family (ZHL-16C), VPM-B
+├── planning/    # ascent planner, gas plan, consumption, rock bottom
+├── utils/       # argument coercion ("40 m", "ean50")
+└── registry.py  # entry-point plugin discovery (diveplan.deco_models)
 ```
 
 ## Development
