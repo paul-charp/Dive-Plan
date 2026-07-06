@@ -111,6 +111,11 @@ for t in (5, 15, bottom.runtime):
         f"TTS {minutes(dive.tts(t, gas_plan=carried))}"
     )
 
+print(
+    f"exposure at end of bottom: CNS {dive.cns_at(bottom.runtime):.1f} %, "
+    f"OTU {dive.otu_at(bottom.runtime):.1f}"
+)
+
 # Tissue loading over time (leading compartment) — feed this to a plot:
 print("leading-compartment N2 tension (mbar):")
 for t, state in dive.tissue_series(timedelta(minutes=9)):

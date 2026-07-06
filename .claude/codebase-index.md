@@ -157,6 +157,9 @@ Dive: a deco model run over a profile, queryable and extendable.
   - `model_at(self, t: timedelta | float) -> BaseDecoModel[StateT]`  — Independent model instance positioned at runtime `t`.
   - `state_at(self, t: timedelta | float) -> StateT`  — Model state at runtime `t` (minutes or timedelta).
   - `ceiling_at(self, t: timedelta | float) -> Pressure`  — Deco ceiling at runtime `t`.
+  - `cns_at(self, t: timedelta | float) -> float`  — CNS oxygen-toxicity clock accumulated by runtime `t`, in percent.
+  - `otu_at(self, t: timedelta | float) -> float`  — Pulmonary oxygen-toxicity units (REPEX) accumulated by runtime `t`.
+  - `_segments_until(self, t: timedelta | float) -> list[DiveSegment]`  — The profile's segments up to `t`, the last one truncated exactly.
   - `tissue_series(self, interval: timedelta | float) -> Iterator[tuple[timedelta, StateT]]`  — Yield (time, state) at each sample step — for tissue plots.
   - `tts(self, t: timedelta | float, gas_plan: GasPlan | None = None) -> timedelta`  — Time-to-surface at runtime `t`: the duration of an ascent planned
   - `plan_ascent(self, gas_plan: GasPlan | None = None) -> list[DiveSegment]`  — Deco schedule from the dive's current end to the surface.
@@ -484,7 +487,7 @@ Argument-coercion helpers shared across the user-facing API.
 - `conftest.py` (0 tests)
 - `test_buhlmann.py` (47 tests) — TestGradient, TestCompartmentState, TestCompartmentIntegration, TestCompartmentToleratedPressure, TestZHL16CTables, TestZHL16CModel, MiniBuhlmann, TestBuhlmannFamily, TestZHL16CRegistry
 - `test_config.py` (45 tests) — TestSubConfigBase, TestPhysicsConfig, TestGasConfig, TestDivePlanningConfig, TestDiveConfigStructure, TestGlobalDefault, TestContextManager, TestDefaultConfigLoading, TestSerialization
-- `test_dive.py` (24 tests) — TestIterSamples, TestDiveRun, TestDiveQueries, TestDiveContinuation
+- `test_dive.py` (28 tests) — TestIterSamples, TestDiveRun, TestDiveQueries, TestDiveContinuation, TestOxygenQueries
 - `test_dive_profile.py` (74 tests) — TestDiveProfileBuilder, TestDiveProfileValidation, TestDiveProfileFixes, TestDiveProfileTimeline, TestDiveProfileFluentBuilders, TestDiveProfileSerialization
 - `test_dive_segment.py` (59 tests) — TestDiveSegmentConstruction, TestDiveSegmentProperties, TestDiveSegmentInterpolation, TestDiveSegmentSplitting, TestDiveSegmentMerging, TestDiveSegmentContinuity, TestDiveSegmentIteration, TestDiveSegmentMagicMethods, TestDiveSegmentImmutability, TestDiveSegmentSerialization
 - `test_gas.py` (61 tests) — TestRawConstruction, TestNamedConstructors, TestFromName, TestPartialPressures, TestMod, TestEnd, TestBestMix, TestEqualityAndHash, TestStringRepresentation

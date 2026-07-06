@@ -10,6 +10,7 @@ since Haldane integration composes).
 Queries and operations:
 
 - ``state_at(t)`` / ``ceiling_at(t)`` — model state and ceiling at any runtime
+- ``cns_at(t)`` / ``otu_at(t)`` — oxygen exposure accumulated by ``t``
 - ``tissue_series(dt)`` — (time, state) samples for visualization
 - ``tts(t)`` — time-to-surface: a counterfactual ascent planned from ``t``
 - ``plan_ascent()`` — the deco schedule from the dive's current end
@@ -30,7 +31,7 @@ from diveplan.core.pressure import Pressure
 from diveplan.dive.dive_profile import DiveProfile, ProfileBuilderPolicy, _as_timedelta
 from diveplan.models.base import BaseDecoModel, DecoState
 from diveplan.planning.ascent_plan import plan_ascent
-from diveplan.planning.gas_plan import GasPlan
+from diveplan.planning.gas_plan import GasPlan, cns_percent, otu
 
 __all__ = ["Dive", "TtsVariations"]
 
@@ -137,6 +138,35 @@ class Dive[StateT: DecoState]:
     def ceiling_at(self, t: timedelta | float) -> Pressure:
         """Deco ceiling at runtime `t`."""
         return self.model_at(t).get_ceiling()
+
+    def cns_at(self, t: timedelta | float) -> float:
+        """CNS oxygen-toxicity clock accumulated by runtime `t`, in percent.
+
+        ``cns_at(profile.runtime)`` is the whole dive so far — the figure a
+        :class:`~diveplan.dive.dive_report.DiveReport` carries as ``cns``.
+        """
+        return cns_percent(self._segments_until(t))
+
+    def otu_at(self, t: timedelta | float) -> float:
+        """Pulmonary oxygen-toxicity units (REPEX) accumulated by runtime `t`."""
+        return otu(self._segments_until(t))
+
+    def _segments_until(self, t: timedelta | float) -> list[DiveSegment]:
+        """The profile's segments up to `t`, the last one truncated exactly."""
+        index = self._profile.segment_index_at(t)
+        offset = _as_timedelta(t) - self._profile.start_time_of_segment(index)
+        segments = list(self._profile.segments[:index])
+        if offset > timedelta(0):
+            segment = self._profile.segments[index]
+            segments.append(
+                DiveSegment(
+                    segment.start_pressure,
+                    segment.pressure_at_time(offset),
+                    offset,
+                    segment.gas,
+                )
+            )
+        return segments
 
     def tissue_series(
         self, interval: timedelta | float

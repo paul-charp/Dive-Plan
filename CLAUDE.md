@@ -65,7 +65,7 @@ Tests: `tests/conftest.py` has an autouse fixture pinning a fresh factory-defaul
 
 A profile is pure geometry (list of segments). Do **not** hang model results (tissue states, ceilings, TTS) on segments or the profile — results live in `Dive` (`dive/dive.py`) so one profile can be run under multiple models/GFs and compared. This is a deliberate, agreed design constraint.
 
-`Dive.run(profile, model)` copies the model, integrates, and stores **state checkpoints at segment boundaries only** (O(segments) memory for batch). Time queries (`state_at`, `ceiling_at`, `model_at`, `tts(t)`) re-integrate at most one partial segment from the nearest checkpoint — exact, because Haldane integration composes. `tissue_series(dt)` reproduces checkpoints exactly only when sampled at the model's own rate (rectangle rule). `DiveProfile.iter_samples(interval)` is the single sampling authority: steps never cross segment boundaries, the last step of a segment is shortened, zero-duration switches yield no step.
+`Dive.run(profile, model)` copies the model, integrates, and stores **state checkpoints at segment boundaries only** (O(segments) memory for batch). Time queries (`state_at`, `ceiling_at`, `model_at`, `cns_at`/`otu_at`, `tts(t)`) re-integrate at most one partial segment from the nearest checkpoint — exact, because Haldane integration composes. `tissue_series(dt)` reproduces checkpoints exactly only when sampled at the model's own rate (rectangle rule). `DiveProfile.iter_samples(interval)` is the single sampling authority: steps never cross segment boundaries, the last step of a segment is shortened, zero-duration switches yield no step.
 
 Key mechanics spread across `dive/dive_profile.py`:
 

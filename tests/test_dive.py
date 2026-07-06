@@ -292,3 +292,53 @@ class TestDiveContinuation:
         # conservative GF-low bound and legitimately does not).
         surfaced = full.model_at(full.profile.runtime)
         assert surfaced.get_ceiling(0.7) <= Pressure.surface()
+
+
+# ------------------------------------------------------------------
+# Oxygen-exposure time queries
+# ------------------------------------------------------------------
+
+
+class TestOxygenQueries:
+    def make_dive(self):
+        from diveplan.planning.gas_plan import GasPlan
+
+        bottom = DiveProfile().descend_to("40 m").stay(25)
+        dive = Dive.run(bottom, ZHL16C(gradient=Gradient(0.3, 0.7)))
+        return dive.with_ascent(GasPlan(["air", "ean50"]))
+
+    def test_zero_at_start(self):
+        dive = self.make_dive()
+        assert dive.cns_at(0) == 0.0
+        assert dive.otu_at(0) == 0.0
+
+    def test_monotonically_increasing(self):
+        dive = self.make_dive()
+        runtime = dive.profile.runtime
+        times = [runtime * f for f in (0.25, 0.5, 0.75, 1.0)]
+        cns_values = [dive.cns_at(t) for t in times]
+        otu_values = [dive.otu_at(t) for t in times]
+        assert cns_values == sorted(cns_values)
+        assert otu_values == sorted(otu_values)
+        assert cns_values[-1] > 0 and otu_values[-1] > 0
+
+    def test_full_dive_matches_kernel_functions(self):
+        from diveplan.planning.gas_plan import cns_percent, otu
+
+        dive = self.make_dive()
+        segments = dive.profile.segments
+        assert dive.cns_at(dive.profile.runtime) == pytest.approx(
+            cns_percent(segments), rel=1e-6
+        )
+        assert dive.otu_at(dive.profile.runtime) == pytest.approx(
+            otu(segments), rel=1e-6
+        )
+
+    def test_partial_segment_is_truncated_exactly(self):
+        dive = self.make_dive()
+        bottom_start = dive.profile.start_time_of_segment(1)
+        # Constant-depth bottom: exposure accrues linearly with time there.
+        a = dive.cns_at(bottom_start + timedelta(minutes=10))
+        b = dive.cns_at(bottom_start + timedelta(minutes=20))
+        at_start = dive.cns_at(bottom_start)
+        assert (b - at_start) == pytest.approx(2 * (a - at_start), rel=1e-6)
