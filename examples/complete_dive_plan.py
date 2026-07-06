@@ -186,3 +186,34 @@ payload = full_dive.to_json()
 restored = DiveProfile.from_json(payload)
 assert restored.segments == full_dive.segments
 print(f"JSON round-trip OK ({len(payload)} bytes, {restored.segment_count} segments)")
+print()
+
+# ---------------------------------------------------------------------------
+# 8. Report — consumption, CNS/OTU, rock bottom, TTS variations, formatters
+# ---------------------------------------------------------------------------
+print("=== 8. Dive report ===")
+
+from diveplan import DiveReport  # noqa: E402
+from diveplan.dive.formatters import (  # noqa: E402
+    ConsoleFormatter,
+    JsonFormatter,
+    SubsurfaceXmlFormatter,
+)
+
+full_result = DiveResult.run(full_dive, zhl)
+report = DiveReport.from_result(
+    full_result,
+    # The "+1 m / +1 min" figures describe the *bottom* plan, so they are
+    # computed on the bottom result and handed to the report.
+    tts_variations=result.tts_variations(carried),
+)
+
+print(ConsoleFormatter().format(report))
+print()
+
+json_doc = JsonFormatter().format(report)
+print(f"JSON report: {len(json_doc)} bytes")
+
+xml_doc = SubsurfaceXmlFormatter().format(report)
+print(f"Subsurface XML: {len(xml_doc)} bytes — write to a .ssrf file and")
+print("import in Subsurface via File > Import > Import log files")

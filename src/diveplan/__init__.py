@@ -35,6 +35,7 @@ from diveplan.core.pressure import Pressure
 
 # -- dive / planning layers ------------------------------------------------
 from diveplan.dive.dive_profile import DiveProfile
+from diveplan.dive.dive_report import DiveReport
 from diveplan.dive.dive_result import DiveResult
 from diveplan.planning.ascent_plan import plan_ascent
 from diveplan.planning.gas_plan import GasPlan
@@ -94,6 +95,7 @@ __all__ = [
     "diveconfig",
     # dive / planning layers
     "DiveProfile",
+    "DiveReport",
     "DiveResult",
     "GasPlan",
     "plan_ascent",

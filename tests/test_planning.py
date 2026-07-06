@@ -218,9 +218,10 @@ class TestPlanAscentDeco:
             elapsed += segment.duration
             if segment.kind is SegmentKind.Constant.STOP:
                 departure_s = elapsed.total_seconds()
-                assert departure_s % 60 == pytest.approx(0, abs=0.51) or (
-                    60 - departure_s % 60
-                ) < 0.51
+                assert (
+                    departure_s % 60 == pytest.approx(0, abs=0.51)
+                    or (60 - departure_s % 60) < 0.51
+                )
 
     def test_vpm_plan_terminates_and_is_well_formed(self):
         model = VpmB()

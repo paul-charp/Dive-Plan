@@ -28,10 +28,10 @@ dev = ["pytest", "pytest-cov", "ruff", "mypy"]
 zhl16c = "diveplan.models.buhlmann.zhl16:ZHL16C"
 vpmb = "diveplan.models.vpm.model:VpmB"
 
-# Uncomment when the formatter modules land:
-# [project.entry-points."diveplan.formatters"]
-# json = "diveplan.dive.formatters.json:JSONFormatter"
-# csv = "diveplan.dive.formatters.csv:CSVFormatter"
+[project.entry-points."diveplan.formatters"]
+console = "diveplan.dive.formatters.console:ConsoleFormatter"
+json = "diveplan.dive.formatters.json:JsonFormatter"
+subsurface = "diveplan.dive.formatters.subsurface:SubsurfaceXmlFormatter"
 
 [tool.ruff]
 line-length = 88

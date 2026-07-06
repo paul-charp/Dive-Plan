@@ -13,7 +13,7 @@ diveplan — dive planning and decompression calculation library.
   - @property `planning(self) -> _DivePlanningConfig`
   dunders: `__repr__, __str__`
 - const `diveconfig = _ConfigProxy()`
-`__all__ = ['Pressure', 'Gas', 'DiveSegment', 'SegmentKind', 'DiveConfig', 'diveconfig', 'DiveProfile', 'DiveResult', 'GasPlan', 'plan_ascent']`
+`__all__ = ['Pressure', 'Gas', 'DiveSegment', 'SegmentKind', 'DiveConfig', 'diveconfig', 'DiveProfile', 'DiveReport', 'DiveResult', 'GasPlan', 'plan_ascent']`
 
 ## `src/diveplan/core/__init__.py`
 Core value objects and configuration for diveplan.
@@ -31,7 +31,7 @@ diveplan.core.config
 ### class `_DivePlanningConfig` (_SubConfig) — Ascent/descent rates and stop parameters.
   attrs: `ascent_rate: float = Field(default=9.0, gt=0, description='m/min'); descent_rate: float = Field(default=20.0, gt=0, description='m/min'); stop_increment_m: float = Field(default=3.0, gt=0, description='meters between deco stops'); last_stop_m: float = Field(default=3.0, gt=0, description='depth of last deco stop in meters'); min_stop_time_s: int = Field(default=60, gt=0, description='minimum time at each stop in seconds'); sample_rate_s: int = Field(default=1, gt=0, description='integration sample rate in seconds'); default_model: str = Field(default='zhl16c', description='registry name of default deco model')`
 ### class `_GasConfig` (_SubConfig) — Gas planning limits and SAC rates.
-  attrs: `min_ppo2_bar: float = Field(default=0.18, gt=0, description='bar — hypoxia floor'); max_ppo2_bar: float = Field(default=1.4, gt=0, description='bar — working/bottom ppO2 limit'); deco_ppo2_bar: float = Field(default=1.6, gt=0, description='bar — ppO2 limit at deco stops'); max_ppn2_bar: float = Field(default=3.2, gt=0, description='bar — narcosis/ppN2 ceiling'); max_end_m: float = Field(default=30.0, gt=0, description='meters — maximum equivalent narcotic depth'); sac_bottom: float = Field(default=20.0, gt=0, description='L/min — surface air consumption at bottom'); sac_deco: float = Field(default=15.0, gt=0, description='L/min — surface air consumption at deco stops'); gas_switch_minutes: float = Field(default=1.0, ge=0, description='minutes added per gas switch — 0 = instant'); gas_switch_at_stops_only: bool = Field(default=True, description='if True, gas switches only allowed at deco stops')`
+  attrs: `min_ppo2_bar: float = Field(default=0.18, gt=0, description='bar — hypoxia floor'); max_ppo2_bar: float = Field(default=1.4, gt=0, description='bar — working/bottom ppO2 limit'); deco_ppo2_bar: float = Field(default=1.6, gt=0, description='bar — ppO2 limit at deco stops'); max_ppn2_bar: float = Field(default=3.2, gt=0, description='bar — narcosis/ppN2 ceiling'); max_end_m: float = Field(default=30.0, gt=0, description='meters — maximum equivalent narcotic depth'); sac_bottom: float = Field(default=20.0, gt=0, description='L/min — surface air consumption at bottom'); sac_deco: float = Field(default=15.0, gt=0, description='L/min — surface air consumption at deco stops'); sac_factor: float = Field(default=2.0, gt=0, description='stress multiplier on SAC for rock-bottom/emergency planning'); problem_solving_minutes: float = Field(default=1.0, ge=0, description='minutes spent solving a problem at depth (rock bottom)'); gas_switch_minutes: float = Field(default=1.0, ge=0, description='minutes added per gas switch — 0 = instant'); gas_switch_at_stops_only: bool = Field(default=True, description='if True, gas switches only allowed at deco stops')`
 - `_try_load(path: Path | str, source: str, config_cls: type[DiveConfig]) -> DiveConfig | None`  — Attempt to load a DiveConfig from a file. Returns None on any failure.
 - `_load_default_config() -> DiveConfig`  — Resolve the startup default config following the priority chain:
 ### class `DiveConfig` (BaseModel) — Root configuration object.
@@ -232,11 +232,22 @@ core/pressure.py — Pressure value type.
   - @classmethod `from_json(cls, data: Optional[str] = None, path: Optional[str] = None) -> DiveProfile`  — Deserialize from a JSON string or file path (see :meth:`from_dict`).
 
 ## `src/diveplan/dive/dive_report.py`
-(empty stub)
+Dive report: everything about a computed dive, ready for presentation.
+`__all__ = ['DiveReport', 'ReportRow']`
+### class `ReportRow` (NamedTuple) — One schedule line: a segment with its cumulative runtime at the end.
+  attrs: `runtime: timedelta; start_depth_m: float; end_depth_m: float; duration: timedelta; gas: Gas; kind: str`
+### class `DiveReport` — Immutable summary of a computed dive.
+  `__slots__ = ('profile', 'model_name', 'rows', 'runtime', 'max_depth', 'consumption_l', 'cns', 'otus', 'rock_bottom_l', 'tts_variations')`
+  - `__init__(self, *, profile: DiveProfile, model_name: str, rows: tuple[ReportRow, ...], runtime: timedelta, max_depth: Pressure, consumption_l: tuple[tuple[Gas, float], ...], cns: float, otus: float, rock_bottom_l: float, tts_variations: Optional[TtsVariations])`
+  - @classmethod `from_result(cls, result: DiveResult[DecoState], *, gas_plan: Optional[GasPlan] = None, tts_variations: Optional[TtsVariations] = None) -> 'DiveReport'`  — Assemble a report from a dive result.
+  attrs: `profile: DiveProfile; model_name: str; rows: tuple[ReportRow, ...]; runtime: timedelta; max_depth: Pressure; consumption_l: tuple[tuple[Gas, float], ...]; cns: float; otus: float; rock_bottom_l: float; tts_variations: Optional[TtsVariations]`
+  dunders: `__repr__`
 
 ## `src/diveplan/dive/dive_result.py`
 Result layer: a deco model run over a profile, queryable by time.
-`__all__ = ['DiveResult']`
+`__all__ = ['DiveResult', 'TtsVariations']`
+### class `TtsVariations` (NamedTuple) — Sensitivity of the time-to-surface to small plan changes — the
+  attrs: `per_meter: timedelta; per_minute: timedelta`
 ### class `DiveResult[StateT: DecoState]` — A deco model's run over a profile: checkpoints + time queries.
   `__slots__ = ('_profile', '_model', '_checkpoints')`
   - `__init__(self, profile: DiveProfile, model: BaseDecoModel[StateT], checkpoints: tuple[StateT, ...])`
@@ -249,11 +260,54 @@ Result layer: a deco model run over a profile, queryable by time.
   - `ceiling_at(self, t: timedelta | float) -> Pressure`  — Deco ceiling at runtime `t`.
   - `tissue_series(self, interval: timedelta | float) -> Iterator[tuple[timedelta, StateT]]`  — Yield (time, state) at each sample step — for tissue plots.
   - `tts(self, t: timedelta | float, gas_plan: GasPlan | None = None) -> timedelta`  — Time-to-surface at runtime `t`: the duration of an ascent planned
+  - `tts_variations(self, gas_plan: GasPlan | None = None) -> TtsVariations`  — Extra time-to-surface per +1 m on the final segment and per +1 min
   - `_unique_gases(self) -> list[Gas]`
+  - @property `model_name(self) -> str`  — Registry name of the model this result was computed with.
   dunders: `__repr__`
+- `_ascent_duration(model: BaseDecoModel[Any], start_pressure: Pressure, gas: Gas, gas_plan: GasPlan, clock_offset: timedelta) -> timedelta`
 
 ## `src/diveplan/dive/formatters/__init__.py`
-(empty stub)
+Report formatters: turn a DiveReport into an output document.
+`__all__ = ['BaseFormatter']`
+### class `BaseFormatter` (ABC) — Base class for all report formatters.
+  - @abstract `format(self, report: DiveReport) -> str`  — Render the report as a string in this formatter's output format.
+  attrs: `NAME: ClassVar[str]`
+
+## `src/diveplan/dive/formatters/console.py`
+Plain-text report formatter for terminals and logs.
+`__all__ = ['ConsoleFormatter']`
+- `_minutes(td: timedelta) -> str`
+- `_describe(row: ReportRow) -> str`
+### class `ConsoleFormatter` (BaseFormatter) — Human-readable dive plan table with a summary block.
+  - `format(self, report: DiveReport) -> str`
+  attrs: `NAME = 'console'`
+
+## `src/diveplan/dive/formatters/json.py`
+JSON report formatter — machine-readable dive plan document.
+`__all__ = ['JsonFormatter']`
+### class `JsonFormatter` (BaseFormatter) — Serialize the whole report to a JSON document.
+  - `__init__(self, *, indent: int | None = 2)`
+  - `format(self, report: DiveReport) -> str`
+  attrs: `NAME = 'json'`
+
+## `src/diveplan/dive/formatters/subsurface.py`
+Subsurface dive-log XML formatter (experimental).
+`__all__ = ['SubsurfaceXmlFormatter']`
+- `_mmss(td: timedelta) -> str`
+- `_depth(metres: float) -> str`
+- `_gas_attrs(gas: Gas) -> dict[str, str]`
+### class `SubsurfaceXmlFormatter` (BaseFormatter) — Render the report as a Subsurface dive-log XML document.
+  - `__init__(self, *, planned_at: datetime | None = None)`
+  - `format(self, report: DiveReport) -> str`
+  attrs: `NAME = 'subsurface'; SAMPLE_STEP = timedelta(seconds=10)`
+
+## `src/diveplan/dive/oxygen.py`
+Oxygen-exposure tracking: NOAA CNS clock and REPEX OTUs.
+`__all__ = ['cns_percent', 'otu', 'NOAA_CNS_LIMITS']`
+- `_cns_limit_minutes(ppo2_bar: float) -> float | None`  — NOAA limit at `ppo2_bar`, linearly interpolated; None below the floor.
+- `_iter_ppo2(segments: Iterable[DiveSegment], step: timedelta) -> Iterable[tuple[float, float]]`  — Yield (minutes, ppO2 bar) exposures: one per constant segment, midpoint
+- `cns_percent(segments: Iterable[DiveSegment], *, step: timedelta = timedelta(seconds=10)) -> float`  — CNS oxygen-toxicity clock over `segments`, in percent (100 = NOAA limit).
+- `otu(segments: Iterable[DiveSegment], *, step: timedelta = timedelta(seconds=10)) -> float`  — Pulmonary oxygen-toxicity units (REPEX) accumulated over `segments`.
 
 ## `src/diveplan/models/__init__.py`
 (empty stub)
@@ -381,11 +435,11 @@ Ascent planner: compute the decompression schedule from a model state.
 ### class `AscentNotConvergingError` (RuntimeError) — The stop loop failed to clear the next target within the iteration cap.
 - `_ceiling(model: BaseDecoModel[Any], target: Pressure, first_stop: Optional[Pressure]) -> Pressure`  — Model ceiling for an ascent-to-`target` test.
 - `_next_targets(current: Pressure) -> list[Pressure]`  — Candidate ascent targets from shallowest to deepest: the surface, then
-- `plan_ascent(model: BaseDecoModel[Any], start_pressure: Pressure, gas: Gas, gas_plan: Optional[GasPlan] = None) -> list[DiveSegment]`  — Plan the decompression ascent from the given position and model state.
+- `plan_ascent(model: BaseDecoModel[Any], start_pressure: Pressure, gas: Gas, gas_plan: Optional[GasPlan] = None, clock_offset: timedelta | float = timedelta(0)) -> list[DiveSegment]`  — Plan the decompression ascent from the given position and model state.
 
 ## `src/diveplan/planning/gas_plan.py`
-Gas plan: the set of gases carried on a dive, and which to breathe when.
-`__all__ = ['GasPlan']`
+Gas plan: carried gases, selection, consumption, and reserve planning.
+`__all__ = ['GasPlan', 'gas_consumption', 'rock_bottom']`
 ### class `GasPlan` — An ordered collection of carried gases with depth-based selection.
   `__slots__ = ('_gases',)`
   - `__init__(self, gases: Iterable[Gas])`
@@ -393,6 +447,8 @@ Gas plan: the set of gases carried on a dive, and which to breathe when.
   - @staticmethod `is_breathable(gas: Gas, pressure: Pressure) -> bool`  — Whether `gas` is within the configured deco ppO2 window here.
   - `best_gas_at(self, pressure: Pressure) -> Optional[Gas]`  — Richest breathable gas at `pressure`, or None if none qualifies.
   dunders: `__repr__`
+- `gas_consumption(segments: Iterable[DiveSegment]) -> dict[Gas, float]`  — Surface litres of each gas consumed over `segments`.
+- `rock_bottom(depth: Pressure | str | float, *, divers: int = 2) -> float`  — Minimum gas reserve (surface litres) at `depth` for an emergency.
 
 ## `src/diveplan/registry.py`
 ### class `PluginNotFoundError` (KeyError)
@@ -427,6 +483,7 @@ Gas plan: the set of gases carried on a dive, and which to breathe when.
 - `test_dive_result.py` (20 tests) — TestIterSamples, TestDiveResultRun, TestDiveResultQueries
 - `test_dive_segment.py` (59 tests) — TestDiveSegmentConstruction, TestDiveSegmentProperties, TestDiveSegmentInterpolation, TestDiveSegmentSplitting, TestDiveSegmentMerging, TestDiveSegmentContinuity, TestDiveSegmentIteration, TestDiveSegmentMagicMethods, TestDiveSegmentImmutability, TestDiveSegmentSerialization
 - `test_gas.py` (61 tests) — TestRawConstruction, TestNamedConstructors, TestFromName, TestPartialPressures, TestMod, TestEnd, TestBestMix, TestEqualityAndHash, TestStringRepresentation
-- `test_planning.py` (15 tests) — TestGasPlan, TestPlanAscentNoDeco, TestPlanAscentDeco
+- `test_planning.py` (16 tests) — TestGasPlan, TestPlanAscentNoDeco, TestPlanAscentDeco
 - `test_pressure.py` (70 tests) — TestConstruction, TestProperties, TestAltConstructorsAndProperties, TestStringParsing, TestImmutability, TestAddition, TestSubtraction, TestMultiplication, TestDivision, TestOrdering, TestHashing, TestDisplay
+- `test_report.py` (21 tests) — TestGasConsumption, TestRockBottom, TestOxygenExposure, TestTtsVariations, TestDiveReport
 - `test_vpm.py` (23 tests) — TestBubbleMechanics, TestVpmBModel, TestVpmBRegistry

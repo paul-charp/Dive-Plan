@@ -38,8 +38,10 @@ Layering (imports flow strictly downward; `core/` never imports from upper layer
 core/          Pressure, Gas, DiveSegment, DiveConfig — value objects + config
 dive/dive_profile.py  DiveProfile (builder/validation/timeline/iter_samples) — core only
 models/        deco models (BaseDecoModel[StateT], Bühlmann family, VPM-B)
-planning/      plan_ascent + GasPlan — consumes models
+planning/      plan_ascent, GasPlan, gas_consumption, rock_bottom — consumes models
 dive/dive_result.py   DiveResult — top of the stack (profile + models + planning)
+dive/dive_report.py   DiveReport (pure data) + dive/formatters/ (console, json, subsurface XML)
+dive/oxygen.py CNS (NOAA table) and OTU accumulation over segments
 registry.py    entry-point plugin discovery for deco models
 ```
 
@@ -86,9 +88,13 @@ Model families: `BuhlmannModel` (models/buhlmann/model.py) is the whole Bühlman
 
 Plugin discovery: entry-point group **`diveplan.deco_models`** (single source of truth: `_ENTRY_POINT_GROUP` in `registry.py`). The registry eagerly loads *every* entry point in the group on first access, so never register an entry point in `pyproject.toml` before its module exists — one dangling reference breaks all model lookups. The `zhl16c` and formatter entry points are commented out in `pyproject.toml` until their modules land; `DiveConfig.planning.default_model` defaults to `"zhl16c"`, so uncomment the entry point in the same PR that adds `zhl16.py`. `registry.register_model()` is the manual escape hatch for tests.
 
+### Report layer
+
+`DiveReport.from_result(result)` is pure data: schedule rows + gas consumption (surface litres, exact per linear segment), CNS/OTU (`dive/oxygen.py`), rock bottom at max depth, and optional `TtsVariations` (the "+1 m / +1 min" figures — compute them on the *bottom* result via `DiveResult.tts_variations()`, they are meaningless on a full dive with deco). Formatters (`BaseFormatter.format(report) -> str`) are presentation-only; entry-point group `diveplan.formatters` (console/json/subsurface). Consumption/CNS/OTU take `Iterable[DiveSegment]`, so they work on plans as well as profiles.
+
 ### Known state / gotchas
 
-- `dive/dive_report.py` and `dive/formatters/` are empty stubs (report layer not started).
+- The Subsurface XML formatter is experimental — validated structurally, not yet round-tripped through a real Subsurface import.
 - VPM-B CVA + Boyle compensation pending in the planner (see above).
 - `diveplan_roadmap.md` predates implementation and drifts from the code in places (e.g. `DiveStep`/`AbstractDecoModel` naming — the code's `DiveSegment`/`BaseDecoModel` won); trust the code.
 - `__init__.py` re-exports core types, `DiveProfile`, `DiveResult`, `GasPlan`, `plan_ascent`, and a `diveconfig` proxy.
