@@ -25,6 +25,8 @@ from diveplan.dive.dive import Dive, TtsVariations
 from diveplan.dive.formatters import (
     ConsoleFormatter,
     JsonFormatter,
+    RichConsoleFormatter,
+    RuntimeFormatter,
     SubsurfaceXmlFormatter,
 )
 from diveplan.models.buhlmann.common import Gradient
@@ -253,3 +255,60 @@ class TestDiveReport:
         assert any(e.get("name") == "gaschange" for e in events)
         depth = computer.find("depth")
         assert depth is not None and depth.get("max") == "40.0 m"
+
+
+class TestRuntimeFormatter:
+    def test_transitions_folded_into_stops(self):
+        text = RuntimeFormatter().format(full_dive_report())
+        lines = text.splitlines()
+        # The 15 m level appears exactly once: as a stop row, never as travel.
+        rows_15m = [ln for ln in lines if " 15m" in ln]
+        assert len(rows_15m) == 1
+        assert rows_15m[0].lstrip().startswith("-")
+        # First deco ascent (bottom -> 18 m) and final surfacing keep rows.
+        assert any(ln.lstrip().startswith("^  18m") or "^  18m" in ln for ln in lines)
+        assert any("^   0m" in ln for ln in lines)
+
+    def test_stop_rows_include_travel_time(self):
+        report = full_dive_report()
+        text = RuntimeFormatter().format(report)
+        # Whole-minute runtimes; the last row's runtime equals the total.
+        total = round(report.runtime.total_seconds() / 60)
+        assert f"{total:6d}min" in text
+
+    def test_gas_shown_only_on_change(self):
+        text = RuntimeFormatter().format(full_dive_report())
+        # Only table rows (the footer names gases again in the totals).
+        rows = [ln for ln in text.splitlines() if ln.startswith(" ") and "min" in ln]
+        assert sum(ln.endswith("Air") for ln in rows) == 1
+        assert sum(ln.endswith("EAN50") for ln in rows) == 1
+
+    def test_footer_content(self):
+        text = RuntimeFormatter().format(full_dive_report())
+        assert "rock bottom" in text
+        assert "CNS" in text and "OTU" in text
+        assert "DO NOT USE FOR REAL DIVES" in text
+
+    def test_ascii_only(self):
+        text = RuntimeFormatter().format(full_dive_report())
+        assert text.isascii()
+
+    def test_write_to_txt(self, tmp_path):
+        report = full_dive_report()
+        target = tmp_path / "plan.txt"
+        formatter = RuntimeFormatter()
+        formatter.write(report, target)
+        assert target.read_text(encoding="utf-8") == formatter.format(report)
+
+
+class TestRichConsoleFormatter:
+    def test_plain_string_contains_report(self):
+        text = RichConsoleFormatter(styled=False).format(full_dive_report())
+        assert "zhl16c" in text
+        assert "switch to EAN50" in text
+        assert "rock bottom" in text
+        assert "[" not in text  # no ANSI when unstyled
+
+    def test_styled_string_has_ansi(self):
+        text = RichConsoleFormatter(styled=True).format(full_dive_report())
+        assert "[" in text

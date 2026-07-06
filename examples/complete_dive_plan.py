@@ -27,6 +27,7 @@ from diveplan.core.dive_segment import SegmentKind
 from diveplan.dive.formatters import (
     ConsoleFormatter,
     JsonFormatter,
+    RuntimeFormatter,
     SubsurfaceXmlFormatter,
 )
 from diveplan.models.buhlmann.zhl16 import ZHL16C
@@ -181,6 +182,15 @@ report = DiveReport.from_dive(
 
 print(ConsoleFormatter().format(report))
 print()
+
+# The runtime sheet: transitions folded into stops, whole minutes — what a
+# diver actually writes on a slate. Save it with .write(report, "plan.txt").
+print(RuntimeFormatter().format(report))
+print()
+
+# For a colored interactive rendering, try:
+#   from diveplan.dive.formatters import RichConsoleFormatter
+#   RichConsoleFormatter().print(report)
 
 json_doc = JsonFormatter().format(report)
 print(f"JSON report: {len(json_doc)} bytes")

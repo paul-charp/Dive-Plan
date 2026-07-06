@@ -279,6 +279,7 @@ Report formatters: turn a DiveReport into an output document.
 `__all__ = ['BaseFormatter']`
 ### class `BaseFormatter` (ABC) — Base class for all report formatters.
   - @abstract `format(self, report: DiveReport) -> str`  — Render the report as a string in this formatter's output format.
+  - `write(self, report: DiveReport, path: str | Path) -> None`  — Render the report and write it to `path` (UTF-8, LF endings).
   attrs: `NAME: ClassVar[str]`
 
 ## `src/diveplan/dive/formatters/console.py`
@@ -299,8 +300,29 @@ JSON report formatter — machine-readable dive plan document.
   - `format(self, report: DiveReport) -> str`  — Render the report as a JSON document string.
   attrs: `NAME = 'json'`
 
+## `src/diveplan/dive/formatters/rich_console.py`
+Rich terminal formatter: the report as styled tables.
+`__all__ = ['RichConsoleFormatter']`
+- `_minutes(td: timedelta) -> str`
+- `_action(row: ReportRow) -> str`
+### class `RichConsoleFormatter` (BaseFormatter) — Styled terminal rendering of a dive report.
+  - `__init__(self, *, styled: bool = True, width: int = 72)`
+  - `print(self, report: DiveReport, console: Console | None = None) -> None`  — Render the report directly to a terminal (auto-detected styling).
+  - `format(self, report: DiveReport) -> str`  — Render the report to a string (ANSI-styled when ``styled=True``).
+  - `_renderable(self, report: DiveReport) -> RenderableType`
+  attrs: `NAME = 'rich'`
+
+## `src/diveplan/dive/formatters/runtime.py`
+Runtime-table formatter: the plan as a diver would write it on a slate.
+`__all__ = ['RuntimeFormatter']`
+- `_minutes(td: timedelta) -> int`
+### class `RuntimeFormatter` (BaseFormatter) — Printable runtime sheet: depth / duration / runtime / gas.
+  - `format(self, report: DiveReport) -> str`  — Render the runtime sheet as plain ASCII text.
+  - @staticmethod `_table_rows(report: DiveReport) -> list[tuple[str, float, timedelta, timedelta, Gas]]`  — Fold deco travel/switches into stop rows; keep phase boundaries.
+  attrs: `NAME = 'runtime'`
+
 ## `src/diveplan/dive/formatters/subsurface.py`
-Subsurface dive-log XML formatter (experimental).
+Subsurface dive-log XML formatter.
 `__all__ = ['SubsurfaceXmlFormatter']`
 - `_mmss(td: timedelta) -> str`
 - `_depth(metres: float) -> str`
@@ -493,5 +515,5 @@ Argument-coercion helpers shared across the user-facing API.
 - `test_gas.py` (61 tests) — TestRawConstruction, TestNamedConstructors, TestFromName, TestPartialPressures, TestMod, TestEnd, TestBestMix, TestEqualityAndHash, TestStringRepresentation
 - `test_planning.py` (18 tests) — TestGasPlan, TestPlanAscentNoDeco, TestPlanAscentDeco
 - `test_pressure.py` (70 tests) — TestConstruction, TestProperties, TestAltConstructorsAndProperties, TestStringParsing, TestImmutability, TestAddition, TestSubtraction, TestMultiplication, TestDivision, TestOrdering, TestHashing, TestDisplay
-- `test_report.py` (21 tests) — TestGasConsumption, TestRockBottom, TestOxygenExposure, TestTtsVariations, TestDiveReport
+- `test_report.py` (29 tests) — TestGasConsumption, TestRockBottom, TestOxygenExposure, TestTtsVariations, TestDiveReport, TestRuntimeFormatter, TestRichConsoleFormatter
 - `test_vpm.py` (23 tests) — TestBubbleMechanics, TestVpmBModel, TestVpmBRegistry

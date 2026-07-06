@@ -89,7 +89,7 @@ Plugin discovery: entry-point group **`diveplan.deco_models`** (single source of
 
 ### Report layer
 
-`DiveReport.from_dive(dive)` is pure data: schedule rows + gas consumption (surface litres, exact per linear segment), CNS/OTU (`planning/gas_plan.py`), rock bottom at max depth, and optional `TtsVariations` (the "+1 m / +1 min" figures — compute them on the *bottom* dive via `Dive.tts_variations()`, they are meaningless on a full dive with deco). Formatters (`BaseFormatter.format(report) -> str`) are presentation-only; entry-point group `diveplan.formatters` (console/json/subsurface). Consumption/CNS/OTU take `Iterable[DiveSegment]`, so they work on plans as well as profiles.
+`DiveReport.from_dive(dive)` is pure data: schedule rows + gas consumption (surface litres, exact per linear segment), CNS/OTU (`planning/gas_plan.py`), rock bottom at max depth, and optional `TtsVariations` (the "+1 m / +1 min" figures — compute them on the *bottom* dive via `Dive.tts_variations()`, they are meaningless on a full dive with deco). Formatters (`BaseFormatter.format(report) -> str`) are presentation-only; entry-point group `diveplan.formatters` (console, rich, runtime sheet, json, subsurface XML). The runtime formatter folds deco transitions into stop rows (dive-table convention); `BaseFormatter.write(report, path)` saves any format to a file. Consumption/CNS/OTU take `Iterable[DiveSegment]`, so they work on plans as well as profiles.
 
 ### Known state / gotchas
 

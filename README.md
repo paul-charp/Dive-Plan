@@ -13,7 +13,7 @@ simulations comparing algorithms, gases, and conditions.
 
 ## Status
 
-Early development — **all layers below are implemented and tested** (458 tests, strict mypy):
+Early development — **all layers below are implemented and tested** (470 tests, strict mypy):
 
 | Component | Status |
 |---|---|
@@ -26,7 +26,7 @@ Early development — **all layers below are implemented and tested** (458 tests
 | Deco models — Bühlmann ZHL-16C (GF), VPM-B (pre-CVA) | ✅ |
 | `Dive` — checkpoints, `state_at`/`ceiling_at`/`tts(t)`, `with_ascent` | ✅ |
 | Ascent planner (`plan_ascent`) + `GasPlan` | ✅ |
-| `DiveReport` + formatters (console, JSON, Subsurface XML) | ✅ |
+| `DiveReport` + formatters (console, rich, runtime sheet, JSON, Subsurface XML) | ✅ |
 | Gas consumption, rock bottom, CNS/OTU, TTS variations | ✅ |
 | VPM-B critical-volume/Boyle stage | 🚧 in progress |
 

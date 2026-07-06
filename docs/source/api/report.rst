@@ -20,6 +20,14 @@ Formatters
    :members:
    :show-inheritance:
 
+.. automodule:: diveplan.dive.formatters.rich_console
+   :members:
+   :show-inheritance:
+
+.. automodule:: diveplan.dive.formatters.runtime
+   :members:
+   :show-inheritance:
+
 .. automodule:: diveplan.dive.formatters.subsurface
    :members:
    :show-inheritance:
