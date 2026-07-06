@@ -19,17 +19,26 @@ compared — nothing here mutates the profile or the caller's model.
 """
 
 from datetime import timedelta
-from typing import Iterator
+from typing import Any, Iterator, NamedTuple
 
-from diveplan.core.dive_segment import DiveSegment
+from diveplan.core.config import DiveConfig
+from diveplan.core.dive_segment import DiveSegment, SegmentKind
 from diveplan.core.gas import Gas
 from diveplan.core.pressure import Pressure
-from diveplan.dive.dive_profile import DiveProfile, _as_timedelta
+from diveplan.dive.dive_profile import DiveProfile, ProfileBuilderPolicy, _as_timedelta
 from diveplan.models.base import BaseDecoModel, DecoState
 from diveplan.planning.ascent_plan import plan_ascent
 from diveplan.planning.gas_plan import GasPlan
 
-__all__ = ["DiveResult"]
+__all__ = ["DiveResult", "TtsVariations"]
+
+
+class TtsVariations(NamedTuple):
+    """Sensitivity of the time-to-surface to small plan changes — the
+    "+x /m +y /min" figures planners print next to a runtime."""
+
+    per_meter: timedelta
+    per_minute: timedelta
 
 
 class DiveResult[StateT: DecoState]:
@@ -162,6 +171,66 @@ class DiveResult[StateT: DecoState]:
         )
         return sum((s.duration for s in ascent), timedelta(0))
 
+    def tts_variations(self, gas_plan: GasPlan | None = None) -> TtsVariations:
+        """Extra time-to-surface per +1 m on the final segment and per +1 min
+        of extra time at the current depth (both re-planned, not estimated).
+
+        Meaningful when the profile ends in the bottom phase (the normal
+        planning situation): "+1 m" re-runs the model over the profile with
+        its final segment shifted one metre deeper (a transition is inserted
+        automatically), "+1 min" extends the dive by a minute at the final
+        depth. Deltas are clamped at zero — clock-aligned stop rounding can
+        otherwise produce a spurious −few-seconds.
+        """
+        if gas_plan is None:
+            gas_plan = GasPlan(self._unique_gases())
+        end = self._profile.runtime
+        base = self.tts(end, gas_plan)
+
+        # +1 minute at the current depth.
+        end_pressure = self._profile.pressure_at(end)
+        end_gas = self._profile.gas_at(end)
+        longer = self.model_at(end)
+        longer.integrate_segment(DiveSegment(end_pressure, end_pressure, 1, end_gas))
+        plus_minute = _ascent_duration(
+            longer, end_pressure, end_gas, gas_plan, end + timedelta(minutes=1)
+        )
+
+        # Final segment 1 m deeper, transition auto-inserted, model re-run.
+        delta_mbar = round(DiveConfig.current().physics.pressure_per_meter_mbar)
+        last = self._profile.segments[-1]
+        deeper = DiveSegment(
+            Pressure(last.start_pressure.mbar + delta_mbar),
+            Pressure(last.end_pressure.mbar + delta_mbar),
+            last.duration,
+            last.gas,
+            ascent_kind=last.kind
+            if isinstance(last.kind, SegmentKind.Ascent)
+            else SegmentKind.ASCENT,
+            constant_kind=last.kind
+            if isinstance(last.kind, SegmentKind.Constant)
+            else SegmentKind.CONSTANT,
+        )
+        variant = self._profile.copy(
+            override_policy=ProfileBuilderPolicy.ALLOW_BAD_PROFILE
+        )
+        variant.replace_segment_at_index(-1, deeper)
+        variant.fix_continuity()
+
+        deep_model = self._model.copy()
+        deep_model.set_state(self._checkpoints[0])
+        for segment in variant.segments:
+            deep_model.integrate_segment(segment)
+        plus_meter = _ascent_duration(
+            deep_model, deeper.end_pressure, deeper.gas, gas_plan, variant.runtime
+        )
+
+        zero = timedelta(0)
+        return TtsVariations(
+            per_meter=max(zero, plus_meter - base),
+            per_minute=max(zero, plus_minute - base),
+        )
+
     def _unique_gases(self) -> list[Gas]:
         gases: list[Gas] = []
         for segment in self._profile.segments:
@@ -169,9 +238,31 @@ class DiveResult[StateT: DecoState]:
                 gases.append(segment.gas)
         return gases
 
+    @property
+    def model_name(self) -> str:
+        """Registry name of the model this result was computed with."""
+        return getattr(type(self._model), "NAME", type(self._model).__name__)
+
     def __repr__(self) -> str:
         return (
             f"DiveResult({type(self._model).__name__}, "
             f"{self._profile.segment_count} segments, "
             f"runtime={self._profile.runtime})"
         )
+
+
+def _ascent_duration(
+    model: BaseDecoModel[Any],
+    start_pressure: Pressure,
+    gas: Gas,
+    gas_plan: GasPlan,
+    clock_offset: timedelta,
+) -> timedelta:
+    plan = plan_ascent(
+        model,
+        start_pressure=start_pressure,
+        gas=gas,
+        gas_plan=gas_plan,
+        clock_offset=clock_offset,
+    )
+    return sum((s.duration for s in plan), timedelta(0))
