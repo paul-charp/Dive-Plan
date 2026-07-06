@@ -30,6 +30,7 @@ schedule, and report:
     dive = Dive.run(bottom, ZHL16C(gradient="30/70"))
     dive.ceiling_at(20).depth_m        # deco ceiling 20 min into the dive
     dive.tts(20, gas_plan=carried)     # time-to-surface if ascending now
+    dive.cns_at(20)                    # CNS % accumulated so far
 
     full = dive.with_ascent(carried)   # new Dive, completed with its deco stops
     report = DiveReport.from_dive(full, tts_variations=dive.tts_variations(carried))

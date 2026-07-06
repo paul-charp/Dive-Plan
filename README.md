@@ -129,6 +129,7 @@ dive = Dive.run(bottom, ZHL16C(gradient="30/70"))
 
 dive.ceiling_at(23).depth_m   # deco ceiling 23 minutes into the dive
 dive.tts(23)                  # time-to-surface if ascending right now
+dive.cns_at(23), dive.otu_at(23)   # oxygen exposure accumulated so far
 for t, state in dive.tissue_series(1):   # tissue loading, 1-min samples
     ...
 
