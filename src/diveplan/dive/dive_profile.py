@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import json
+from collections.abc import Mapping
+from datetime import timedelta
 from enum import Enum, auto
-from typing import Optional
+from typing import Any, Optional
 
 from ..core.config import DiveConfig
 from ..core.dive_segment import DiveSegment, SegmentKind
 from ..core.gas import Gas
 from ..core.pressure import Pressure
+from ..utils.conversions import coerce_depth_to_pressure, coerce_gas
 
 __all__ = (
     "DiveProfile",
@@ -90,9 +94,7 @@ class ProfileStartEndError(ProfileValidationError):
 
     fixable = True
 
-    def __init__(
-        self, first_segment: DiveSegment, last_segment: DiveSegment
-    ) -> None:
+    def __init__(self, first_segment: DiveSegment, last_segment: DiveSegment) -> None:
         super().__init__(
             f"Dive profile must start and end at the surface, but starts with "
             f"{first_segment} and ends with {last_segment}. "
@@ -200,6 +202,23 @@ class ProfileBuilderPolicy(Enum):
 
 
 # ------------------------------------------------------------------
+# Argument coercion helpers (fluent builder + timeline ergonomics)
+# ------------------------------------------------------------------
+
+# Depth/gas coercion is shared with the rest of the library.
+_as_pressure = coerce_depth_to_pressure
+_as_gas = coerce_gas
+
+
+def _as_timedelta(value: timedelta | float) -> timedelta:
+    """Coerce a time argument: timedelta as-is, bare numbers as minutes
+    (matching the DiveSegment duration convention)."""
+    if isinstance(value, timedelta):
+        return value
+    return timedelta(minutes=value)
+
+
+# ------------------------------------------------------------------
 # Dive Profile
 # ------------------------------------------------------------------
 class DiveProfile:
@@ -261,10 +280,10 @@ class DiveProfile:
         return new_profile
 
     def _get_last_pressure(self) -> Pressure:
-        """Get the starting pressure of the last segment, or surface pressure if empty."""
+        """Current position — the end pressure of the last segment, or surface if empty."""
         if not self._segments:
             return Pressure.surface()
-        return self.get_segment(-1).start_pressure
+        return self.get_segment(-1).end_pressure
 
     def _get_last_gas(self) -> Gas:
         """Get the gas of the last segment, or air if empty."""
@@ -281,6 +300,80 @@ class DiveProfile:
     def segment_count(self) -> int:
         """The number of segments in the profile."""
         return len(self._segments)
+
+    # ------------------------------------------------------------------
+    # Timeline — address the profile by runtime instead of segment index
+    # ------------------------------------------------------------------
+    # Convention: a segment owns the half-open interval [start, end) of the
+    # global timeline; the final segment additionally owns its end instant
+    # (t == runtime). At a seam this resolves to the *later* segment, so
+    # gas_at() at a gas-switch boundary reports the new gas. Zero-duration
+    # segments (instant gas switches) own no interval and are skipped.
+
+    @property
+    def runtime(self) -> timedelta:
+        """Total duration of the profile (sum of all segment durations)."""
+        return sum((s.duration for s in self._segments), timedelta(0))
+
+    def start_time_of_segment(self, index: int) -> timedelta:
+        """Elapsed runtime at which the segment at `index` begins.
+
+        Raises:
+            IndexError: If the index is out of range.
+        """
+        n = len(self._segments)
+        pos = index if index >= 0 else n + index
+        if not 0 <= pos < n:
+            raise IndexError(
+                f"Segment index {index} is out of range for dive profile with "
+                f"{n} segments."
+            )
+        return sum((s.duration for s in self._segments[:pos]), timedelta(0))
+
+    def segment_index_at(self, t: timedelta | float) -> int:
+        """Index of the segment active at runtime `t` (minutes or timedelta).
+
+        Raises:
+            ProfileEmptyError: If the profile has no segments.
+            ValueError: If `t` is negative or beyond the total runtime.
+        """
+        if not self._segments:
+            raise ProfileEmptyError()
+
+        t = _as_timedelta(t)
+        if t < timedelta(0):
+            raise ValueError(f"t={t} is negative.")
+
+        elapsed = timedelta(0)
+        for i, segment in enumerate(self._segments):
+            end = elapsed + segment.duration
+            if t < end:
+                return i
+            elapsed = end
+
+        if t == elapsed:  # t == runtime → owned by the final segment
+            return len(self._segments) - 1
+        raise ValueError(f"t={t} is beyond the profile runtime {elapsed}.")
+
+    def segment_at(self, t: timedelta | float) -> DiveSegment:
+        """The segment active at runtime `t` (minutes or timedelta)."""
+        return self._segments[self.segment_index_at(t)]
+
+    def pressure_at(self, t: timedelta | float) -> Pressure:
+        """Ambient pressure at runtime `t` (minutes or timedelta), interpolated
+        linearly within the active segment."""
+        index = self.segment_index_at(t)
+        segment = self._segments[index]
+        # A zero-duration segment (instant gas switch) is a single instant at
+        # constant depth — interpolation would divide by zero.
+        if segment.duration == timedelta(0):
+            return segment.start_pressure
+        offset = _as_timedelta(t) - self.start_time_of_segment(index)
+        return segment.pressure_at_time(offset)
+
+    def gas_at(self, t: timedelta | float) -> Gas:
+        """Breathing gas at runtime `t` (minutes or timedelta)."""
+        return self.segment_at(t).gas
 
     # ------------------------------------------------------------------
     # Seam helpers — local (O(1)) validation between two adjacent segments
@@ -345,9 +438,7 @@ class DiveProfile:
             self._builder_policy is ProfileBuilderPolicy.RAISE_BAD_PROFILE
             and self._segments
         ):
-            self._raise_on_seam(
-                self._segments[-1], segment, len(self._segments) - 1
-            )
+            self._raise_on_seam(self._segments[-1], segment, len(self._segments) - 1)
 
         self._segments.append(segment)
         self._autofix()
@@ -490,6 +581,142 @@ class DiveProfile:
         return self._segments.index(segment)
 
     # ------------------------------------------------------------------
+    # Fluent builders — chainable, coerce "40 m" / "ean50" style arguments
+    # ------------------------------------------------------------------
+    # Each method starts from the current position (end pressure of the last
+    # segment, or the surface for an empty profile) and appends via
+    # add_segment(), so the active builder policy applies as usual.
+    #
+    #     profile = (
+    #         DiveProfile()
+    #         .descend_to("40 m")
+    #         .stay(20)
+    #         .ascend_to("21 m")
+    #         .switch_gas("ean50")
+    #         .surface()
+    #     )
+
+    def descend_to(
+        self,
+        depth: Pressure | str | float,
+        *,
+        rate: Optional[float] = None,
+        gas: Gas | str | None = None,
+    ) -> DiveProfile:
+        """Append a descent from the current position to `depth`.
+
+        Args:
+            depth: Target as a Pressure, a parseable string ("40 m", "5 bar"),
+                or a bare number in metres.
+            rate: Descent rate in m/min. Defaults to the configured
+                planning.descent_rate.
+            gas: Gas for the descent (Gas or name like "ean32"). Defaults to
+                the current gas (air on an empty profile).
+
+        Raises:
+            ValueError: If `depth` is not below the current position.
+        """
+        target = _as_pressure(depth)
+        start = self._get_last_pressure()
+        if target <= start:
+            raise ValueError(
+                f"descend_to target {target.depth_m:.1f} m is not below the "
+                f"current position {start.depth_m:.1f} m — use ascend_to()."
+            )
+        rate = rate if rate is not None else DiveConfig.current().planning.descent_rate
+        gas_mix = _as_gas(gas) if gas is not None else self._get_last_gas()
+        duration = abs(target.depth_m - start.depth_m) / rate
+        return self.add_segment(DiveSegment(start, target, duration, gas_mix))
+
+    def ascend_to(
+        self,
+        depth: Pressure | str | float,
+        *,
+        rate: Optional[float] = None,
+        gas: Gas | str | None = None,
+        kind: SegmentKind.Ascent = SegmentKind.ASCENT,
+    ) -> DiveProfile:
+        """Append an ascent from the current position to `depth`.
+
+        Args:
+            depth: Target as a Pressure, a parseable string ("21 m", "2 bar"),
+                or a bare number in metres.
+            rate: Ascent rate in m/min. Defaults to the configured
+                planning.ascent_rate.
+            gas: Gas for the ascent (Gas or name). Defaults to the current gas.
+            kind: Ascent kind. Defaults to SegmentKind.ASCENT (forced ascent).
+
+        Raises:
+            ValueError: If `depth` is not above the current position.
+        """
+        target = _as_pressure(depth)
+        start = self._get_last_pressure()
+        if target >= start:
+            raise ValueError(
+                f"ascend_to target {target.depth_m:.1f} m is not above the "
+                f"current position {start.depth_m:.1f} m — use descend_to()."
+            )
+        rate = rate if rate is not None else DiveConfig.current().planning.ascent_rate
+        gas_mix = _as_gas(gas) if gas is not None else self._get_last_gas()
+        duration = abs(target.depth_m - start.depth_m) / rate
+        return self.add_segment(
+            DiveSegment(start, target, duration, gas_mix, ascent_kind=kind)
+        )
+
+    def stay(
+        self,
+        duration: timedelta | float,
+        *,
+        gas: Gas | str | None = None,
+        kind: SegmentKind.Constant = SegmentKind.CONSTANT,
+    ) -> DiveProfile:
+        """Append a constant-depth segment at the current position.
+
+        Args:
+            duration: Time to stay — minutes as a number, or a timedelta.
+            gas: Gas for the segment (Gas or name). Defaults to the current gas.
+            kind: Constant kind, e.g. SegmentKind.Constant.STOP for a deco
+                stop. Defaults to SegmentKind.CONSTANT (bottom time).
+        """
+        here = self._get_last_pressure()
+        gas_mix = _as_gas(gas) if gas is not None else self._get_last_gas()
+        return self.add_segment(
+            DiveSegment(here, here, duration, gas_mix, constant_kind=kind)
+        )
+
+    def switch_gas(self, gas: Gas | str) -> DiveProfile:
+        """Append a gas switch at the current position.
+
+        The switch takes the configured gas.gas_switch_minutes (zero = instant
+        switch). Switching to the gas already in use is a no-op.
+
+        Args:
+            gas: The new gas (Gas or name like "ean50").
+        """
+        new_gas = _as_gas(gas)
+        if new_gas == self._get_last_gas():
+            return self
+        here = self._get_last_pressure()
+        return self.add_segment(
+            DiveSegment(
+                here,
+                here,
+                DiveConfig.current().gas.gas_switch_minutes,
+                new_gas,
+                constant_kind=SegmentKind.Constant.GAS_SWITCH,
+            )
+        )
+
+    def surface(self) -> DiveProfile:
+        """Append an ascent from the current position to the surface at the
+        configured ascent rate (alias for add_end_surface_segment).
+
+        Raises:
+            ProfileEmptyError: If the profile has no segments.
+        """
+        return self.add_end_surface_segment()
+
+    # ------------------------------------------------------------------
     # Validation
     # ------------------------------------------------------------------
 
@@ -587,9 +814,7 @@ class DiveProfile:
         if isinstance(error, ProfileStartEndError):
             self.add_surface_segments()
         elif isinstance(error, ProfileDepthContinuityError):
-            transition = self.make_transition_segment(
-                error.segment_a, error.segment_b
-            )
+            transition = self.make_transition_segment(error.segment_a, error.segment_b)
             self._segments.insert(error.segment_index + 1, transition)
         elif isinstance(error, ProfileGasContinuityError):
             switch = self.make_gas_switch_segment(error.segment_a, error.segment_b)
@@ -811,3 +1036,55 @@ class DiveProfile:
         if not self._segments:
             raise ProfileEmptyError()
         return self.add_end_surface_segment().add_start_surface_segment()
+
+    # ------------------------------------------------------------------
+    # Serialization
+    # ------------------------------------------------------------------
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a JSON-compatible dict (builder policy + segments)."""
+        return {
+            "builder_policy": self._builder_policy.name,
+            "segments": [segment.to_dict() for segment in self._segments],
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> DiveProfile:
+        """Reconstruct a DiveProfile from :meth:`to_dict` output.
+
+        Segments are loaded exactly as saved, *without* re-validating seams —
+        a stored in-progress profile must round-trip even if it is not (yet)
+        continuous. Call .validate_profile() after loading if you need the
+        guarantees of the RAISE policy.
+
+        Raises:
+            KeyError: If the "segments" field is missing, or an unknown
+                builder policy name is given.
+            ValueError: If a segment entry is malformed.
+        """
+        profile = cls.__new__(cls)
+        profile._builder_policy = ProfileBuilderPolicy[
+            data.get("builder_policy", ProfileBuilderPolicy.RAISE_BAD_PROFILE.name)
+        ]
+        profile._segments = [DiveSegment.from_dict(entry) for entry in data["segments"]]
+        return profile
+
+    def to_json(self, path: Optional[str] = None, indent: int = 2) -> str:
+        """Serialize to a JSON string, optionally writing to a file."""
+        data = json.dumps(self.to_dict(), indent=indent)
+        if path:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(data)
+        return data
+
+    @classmethod
+    def from_json(
+        cls, data: Optional[str] = None, path: Optional[str] = None
+    ) -> DiveProfile:
+        """Deserialize from a JSON string or file path (see :meth:`from_dict`)."""
+        if path:
+            with open(path, encoding="utf-8") as f:
+                data = f.read()
+        if data is None:
+            raise ValueError("Provide either 'data' or 'path'")
+        return cls.from_dict(json.loads(data))

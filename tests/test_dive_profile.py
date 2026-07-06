@@ -7,6 +7,8 @@ and ascent/descent rates are deterministic. This exercises the real continuity
 logic instead of asserting against hand-wired mock return values.
 """
 
+from datetime import timedelta
+
 import pytest
 
 from diveplan.core.dive_segment import DiveSegment, SegmentKind
@@ -204,7 +206,8 @@ class TestDiveProfileBuilder:
         profile = DiveProfile(ALLOW)
         seg = descent(P1, P2)
         profile.add_segment(seg)
-        assert profile._get_last_pressure() == seg.start_pressure
+        # Current position is where the last segment *ends*.
+        assert profile._get_last_pressure() == seg.end_pressure
         assert profile._get_last_gas() == seg.gas
 
 
@@ -266,8 +269,7 @@ class TestDiveProfileValidation:
             [descent(SURF, P2, gas=AIR), switch, ascent(P2, SURF, gas=EAN32)]
         )
         assert not any(
-            isinstance(e, ProfileGasContinuityError)
-            for e in profile.validate_profile()
+            isinstance(e, ProfileGasContinuityError) for e in profile.validate_profile()
         )
 
     def test_validate_simplicity_error(self):
@@ -446,3 +448,210 @@ class TestDiveProfileFixes:
         pressure_gap = descent(P3, P4, gas=EAN32)
         with pytest.raises(ValueError, match="pressure discontinuity"):
             DiveProfile.make_gas_switch_segment(a, pressure_gap)
+
+
+# ------------------------------------------------------------------
+# Timeline
+# ------------------------------------------------------------------
+
+
+class TestDiveProfileTimeline:
+    def test_runtime_empty(self):
+        assert DiveProfile(ALLOW).runtime == timedelta(0)
+
+    def test_runtime(self):
+        profile = valid_profile()  # 2 min descent + 5 min ascent
+        assert profile.runtime == timedelta(minutes=7)
+
+    def test_start_time_of_segment(self):
+        profile = valid_profile()
+        assert profile.start_time_of_segment(0) == timedelta(0)
+        assert profile.start_time_of_segment(1) == timedelta(minutes=2)
+        assert profile.start_time_of_segment(-1) == timedelta(minutes=2)
+        with pytest.raises(IndexError):
+            profile.start_time_of_segment(2)
+
+    def test_segment_index_at(self):
+        profile = valid_profile()
+        assert profile.segment_index_at(0) == 0
+        assert profile.segment_index_at(1.9) == 0
+        assert profile.segment_index_at(2) == 1  # boundary belongs to the later segment
+        assert profile.segment_index_at(timedelta(minutes=7)) == 1  # t == runtime
+
+    def test_segment_index_at_out_of_range(self):
+        profile = valid_profile()
+        with pytest.raises(ValueError, match="negative"):
+            profile.segment_index_at(-1)
+        with pytest.raises(ValueError, match="beyond"):
+            profile.segment_index_at(7.5)
+
+    def test_segment_index_at_empty(self):
+        with pytest.raises(ProfileEmptyError):
+            DiveProfile(ALLOW).segment_index_at(0)
+
+    def test_segment_at_and_gas_at(self):
+        profile = DiveProfile(ALLOW)
+        profile.add_segments(
+            [
+                descent(SURF, P4, minutes=2, gas=AIR),
+                DiveSegment(P4, P4, 20, AIR),
+                DiveSegment(
+                    P4, P4, 1, EAN32, constant_kind=SegmentKind.Constant.GAS_SWITCH
+                ),
+                ascent(P4, SURF, minutes=5, gas=EAN32),
+            ]
+        )
+        assert profile.gas_at(1) == AIR
+        assert profile.gas_at(10) == AIR
+        assert profile.gas_at(22.5) == EAN32  # inside the switch
+        assert profile.gas_at(25) == EAN32
+        assert profile.segment_at(10).kind is SegmentKind.Constant.BOTTOM
+
+    def test_pressure_at_interpolates(self):
+        profile = valid_profile()  # SURF -> P4 over 2 min
+        assert profile.pressure_at(0) == SURF
+        mid = profile.pressure_at(1)
+        assert mid == Pressure(round((SURF.mbar + P4.mbar) / 2))
+        assert profile.pressure_at(profile.runtime) == SURF
+
+    def test_pressure_at_zero_duration_final_segment(self):
+        from diveplan.core.config import DiveConfig
+
+        DiveConfig.current().gas.gas_switch_minutes = 0
+        profile = DiveProfile(ALLOW)
+        profile.add_segment(descent(SURF, P4, minutes=2))
+        profile.switch_gas(EAN32)
+        assert profile.pressure_at(2) == P4
+        assert profile.gas_at(2) == EAN32
+
+
+# ------------------------------------------------------------------
+# Fluent builders
+# ------------------------------------------------------------------
+
+
+class TestDiveProfileFluentBuilders:
+    def test_fluent_chain(self):
+        profile = (
+            DiveProfile()
+            .descend_to("40 m")
+            .stay(20)
+            .ascend_to("21 m")
+            .switch_gas("ean50")
+            .surface()
+        )
+        assert profile.is_valid
+        assert profile.validate_profile(skip_start_end_segments=False) == ()
+        kinds = [s.kind for s in profile.segments]
+        assert kinds[0] is SegmentKind.DESCENT
+        assert kinds[1] is SegmentKind.Constant.BOTTOM
+        assert SegmentKind.Constant.GAS_SWITCH in kinds
+        assert profile.segments[-1].end_pressure == Pressure.surface()
+        assert profile.segments[-1].gas == Gas.nitrox(0.50)
+
+    def test_descend_to_uses_config_rate(self):
+        from diveplan.core.config import DiveConfig
+
+        profile = DiveProfile().descend_to(40)
+        rate = DiveConfig.current().planning.descent_rate
+        expected = timedelta(minutes=40 / rate)
+        assert abs(profile.segments[0].duration - expected) < timedelta(seconds=1)
+
+    def test_descend_to_accepts_pressure_string_and_number(self):
+        for depth in ("40 m", 40, Pressure.from_depth_m(40)):
+            profile = DiveProfile().descend_to(depth)
+            assert profile.segments[0].end_pressure == Pressure.from_depth_m(40)
+
+    def test_descend_to_wrong_direction(self):
+        profile = DiveProfile().descend_to("40 m")
+        with pytest.raises(ValueError, match="use ascend_to"):
+            profile.descend_to("30 m")
+
+    def test_ascend_to_wrong_direction(self):
+        profile = DiveProfile().descend_to("30 m")
+        with pytest.raises(ValueError, match="use descend_to"):
+            profile.ascend_to("40 m")
+
+    def test_stay_defaults_to_last_gas_and_depth(self):
+        profile = DiveProfile().descend_to("30 m", gas="ean32").stay(15)
+        seg = profile.get_last_segment()
+        assert seg.start_pressure == seg.end_pressure == Pressure.from_depth_m(30)
+        assert seg.gas == EAN32
+        assert seg.duration == timedelta(minutes=15)
+
+    def test_stay_stop_kind(self):
+        profile = (
+            DiveProfile().descend_to("6 m").stay(3, kind=SegmentKind.Constant.STOP)
+        )
+        assert profile.get_last_segment().kind is SegmentKind.Constant.STOP
+
+    def test_switch_gas_same_gas_is_noop(self):
+        profile = DiveProfile().descend_to("30 m")  # air
+        count = profile.segment_count
+        profile.switch_gas("air")
+        assert profile.segment_count == count
+
+    def test_switch_gas_duration_from_config(self):
+        from diveplan.core.config import DiveConfig
+
+        DiveConfig.current().gas.gas_switch_minutes = 2.0
+        profile = DiveProfile().descend_to("30 m").switch_gas(EAN32)
+        seg = profile.get_last_segment()
+        assert seg.kind is SegmentKind.Constant.GAS_SWITCH
+        assert seg.duration == timedelta(minutes=2)
+        assert seg.gas == EAN32
+
+    def test_surface_on_empty_raises(self):
+        with pytest.raises(ProfileEmptyError):
+            DiveProfile().surface()
+
+    def test_fluent_respects_raise_policy(self):
+        # descend_to on RAISE policy starts from the current position, so the
+        # chain is always seam-continuous — no policy violation possible.
+        profile = DiveProfile().descend_to("40 m").stay(5).surface()
+        assert profile.builder_policy is RAISE
+        assert profile.is_valid
+
+
+# ------------------------------------------------------------------
+# Serialization
+# ------------------------------------------------------------------
+
+
+class TestDiveProfileSerialization:
+    def test_dict_round_trip(self):
+        profile = (
+            DiveProfile()
+            .descend_to("40 m")
+            .stay(20)
+            .ascend_to("21 m")
+            .switch_gas("ean50")
+            .surface()
+        )
+        restored = DiveProfile.from_dict(profile.to_dict())
+        assert restored.segments == profile.segments
+        assert restored.builder_policy is profile.builder_policy
+
+    def test_json_round_trip(self, tmp_path):
+        profile = DiveProfile(ALLOW).descend_to("30 m").stay(10)
+        path = tmp_path / "profile.json"
+        profile.to_json(path=str(path))
+        restored = DiveProfile.from_json(path=str(path))
+        assert restored.segments == profile.segments
+        assert restored.builder_policy is ALLOW
+
+    def test_from_dict_does_not_revalidate(self):
+        # A discontinuous (in-progress) profile must round-trip even though
+        # it would be rejected by the RAISE policy at build time.
+        profile = DiveProfile(ALLOW)
+        profile.add_segments([descent(SURF, P2), descent(P3, P4)])
+        data = profile.to_dict()
+        data["builder_policy"] = "RAISE_BAD_PROFILE"
+        restored = DiveProfile.from_dict(data)
+        assert restored.segment_count == 2
+        assert restored.builder_policy is RAISE
+        assert len(restored.validate_profile()) == 1
+
+    def test_from_json_requires_data_or_path(self):
+        with pytest.raises(ValueError, match="data.*or.*path"):
+            DiveProfile.from_json()

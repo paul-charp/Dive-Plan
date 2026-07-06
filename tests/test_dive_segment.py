@@ -383,3 +383,83 @@ class TestDiveSegmentMagicMethods:
         seg = DiveSegment(p1, p2, 3, air)
         s = str(seg)
         assert "DESCENT segment from 0.0m to 30.0m" in s
+
+
+# ------------------------------------------------------------------
+# Immutability
+# ------------------------------------------------------------------
+
+
+class TestDiveSegmentImmutability:
+    def test_setattr_raises(self, p1000, p3000, air, ean32):
+        seg = DiveSegment(p1000, p3000, 2, air)
+        with pytest.raises(AttributeError, match="immutable"):
+            seg.gas = ean32
+        with pytest.raises(AttributeError, match="immutable"):
+            seg.duration = td(minutes=99)
+
+    def test_delattr_raises(self, p1000, p3000, air):
+        seg = DiveSegment(p1000, p3000, 2, air)
+        with pytest.raises(AttributeError, match="immutable"):
+            del seg.gas
+
+    def test_hash_stable(self, p1000, p3000, air):
+        seg = DiveSegment(p1000, p3000, 2, air)
+        assert hash(seg) == hash(DiveSegment(p1000, p3000, 2, air))
+
+
+# ------------------------------------------------------------------
+# Serialization
+# ------------------------------------------------------------------
+
+
+class TestDiveSegmentSerialization:
+    def test_to_dict(self, p1000, p3000, air):
+        seg = DiveSegment(p1000, p3000, 2, air)
+        d = seg.to_dict()
+        assert d["start_pressure_mbar"] == 1000
+        assert d["end_pressure_mbar"] == 3000
+        assert d["duration_s"] == 120.0
+        assert d["gas"] == {"fo2": 0.21, "fhe": 0.0}
+        assert d["kind"] == "DESCENT"
+
+    @pytest.mark.parametrize(
+        "make",
+        [
+            lambda p1000, p3000, air, ean32: DiveSegment(p1000, p3000, 2, air),
+            lambda p1000, p3000, air, ean32: DiveSegment(
+                p3000, p1000, 5, air, ascent_kind=SegmentKind.Ascent.DECO_ASCENT
+            ),
+            lambda p1000, p3000, air, ean32: DiveSegment(
+                p3000, p3000, 3, air, constant_kind=SegmentKind.Constant.STOP
+            ),
+            lambda p1000, p3000, air, ean32: DiveSegment(
+                p3000, p3000, 0, ean32, constant_kind=SegmentKind.Constant.GAS_SWITCH
+            ),
+        ],
+        ids=["descent", "deco_ascent", "stop", "instant_gas_switch"],
+    )
+    def test_dict_round_trip(self, make, p1000, p3000, air, ean32):
+        seg = make(p1000, p3000, air, ean32)
+        assert DiveSegment.from_dict(seg.to_dict()) == seg
+
+    def test_json_round_trip(self, p1000, p3000, ean32):
+        seg = DiveSegment(p1000, p3000, 2, ean32)
+        assert DiveSegment.from_json(seg.to_json()) == seg
+
+    def test_from_dict_kind_geometry_mismatch(self, p1000, p3000, air):
+        d = DiveSegment(p1000, p3000, 2, air).to_dict()
+        d["kind"] = "DECO_ASCENT"  # but pressures describe a descent
+        with pytest.raises(ValueError, match="contradicts pressure geometry"):
+            DiveSegment.from_dict(d)
+
+    def test_from_dict_unknown_kind(self, p1000, p3000, air):
+        d = DiveSegment(p1000, p3000, 2, air).to_dict()
+        d["kind"] = "SIDEWAYS"
+        with pytest.raises(ValueError, match="Unknown segment kind"):
+            DiveSegment.from_dict(d)
+
+    def test_segment_kind_from_name(self):
+        assert SegmentKind.from_name("descent") is SegmentKind.Descent.DESCENT
+        assert SegmentKind.from_name("STOP") is SegmentKind.Constant.STOP
+        assert SegmentKind.from_name("GAS_SWITCH") is SegmentKind.Constant.GAS_SWITCH

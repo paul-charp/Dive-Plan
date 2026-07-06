@@ -1,7 +1,9 @@
+import json
 import math
+from collections.abc import Mapping
 from datetime import timedelta
 from enum import Enum, auto
-from typing import Iterator
+from typing import Any, Iterator
 
 from diveplan.core.gas import Gas
 from diveplan.core.pressure import Pressure
@@ -40,6 +42,22 @@ class SegmentKind:
 
     # Union of all possible segment kinds for type annotations
     Members = Descent | Ascent | Constant
+
+    @staticmethod
+    def from_name(name: str) -> SegmentKind.Members:
+        """Look up a segment kind by member name, e.g. ``"DESCENT"``, ``"STOP"``.
+
+        Member names are unique across the Descent/Ascent/Constant sub-enums,
+        so a bare name is unambiguous. Used by DiveSegment deserialization.
+
+        Raises:
+            ValueError: If no segment kind has that name.
+        """
+        key = name.strip().upper()
+        for enum_cls in (SegmentKind.Descent, SegmentKind.Ascent, SegmentKind.Constant):
+            if key in enum_cls.__members__:
+                return enum_cls[key]
+        raise ValueError(f"Unknown segment kind name: {name!r}")
 
 
 class DiveSegment:
@@ -85,15 +103,21 @@ class DiveSegment:
                 duration (an instant switch, gas_switch_minutes = 0).
         """
 
-        self.start_pressure = start_pressure
-        self.end_pressure = end_pressure
+        object.__setattr__(self, "start_pressure", start_pressure)
+        object.__setattr__(self, "end_pressure", end_pressure)
 
-        self.duration = (
-            duration if isinstance(duration, timedelta) else timedelta(minutes=duration)
+        object.__setattr__(
+            self,
+            "duration",
+            duration
+            if isinstance(duration, timedelta)
+            else timedelta(minutes=duration),
         )
 
-        self.gas = gas
-        self.kind = self._determine_kind(ascent_kind, constant_kind)
+        object.__setattr__(self, "gas", gas)
+        object.__setattr__(
+            self, "kind", self._determine_kind(ascent_kind, constant_kind)
+        )
 
         if self.duration < timedelta(0):
             raise ValueError(
@@ -107,6 +131,18 @@ class DiveSegment:
                 f"DiveSegment duration must be strictly positive, got {self.duration}. "
                 "Only a gas switch (constant depth) may have zero duration."
             )
+
+    # ------------------------------------------------------------------
+    # Immutability guard
+    # ------------------------------------------------------------------
+
+    def __setattr__(self, name: str, value: object) -> None:
+        raise AttributeError(
+            "DiveSegment is immutable — create a new instance instead."
+        )
+
+    def __delattr__(self, name: str) -> None:
+        raise AttributeError("DiveSegment is immutable.")
 
     def _determine_kind(
         self,
@@ -385,4 +421,60 @@ class DiveSegment:
             f"over {self.duration.total_seconds() / 60:.1f} minutes, breathing {self.gas.name}"
         )
 
-    # TODO: to_dict, from_dict, to_json, from_json, etc.
+    # -------------------------------------------------------------------
+    # Serialization
+    # -------------------------------------------------------------------
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a JSON-compatible dict.
+
+        Pressures are stored as integer mbar (the ground truth), duration in
+        seconds, and the kind by its member name.
+        """
+        return {
+            "start_pressure_mbar": self.start_pressure.mbar,
+            "end_pressure_mbar": self.end_pressure.mbar,
+            "duration_s": self.duration.total_seconds(),
+            "gas": {"fo2": self.gas.fo2, "fhe": self.gas.fhe},
+            "kind": self.kind.name,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> DiveSegment:
+        """Reconstruct a DiveSegment from :meth:`to_dict` output.
+
+        Raises:
+            ValueError: If the stored kind contradicts the pressure geometry
+                (e.g. kind "DESCENT" but start pressure >= end pressure), or
+                the kind name is unknown.
+            KeyError: If a required field is missing.
+        """
+        kind = SegmentKind.from_name(data["kind"])
+        segment = cls(
+            start_pressure=Pressure(data["start_pressure_mbar"]),
+            end_pressure=Pressure(data["end_pressure_mbar"]),
+            duration=timedelta(seconds=data["duration_s"]),
+            gas=Gas(data["gas"]["fo2"], fhe=data["gas"].get("fhe", 0.0)),
+            ascent_kind=kind
+            if isinstance(kind, SegmentKind.Ascent)
+            else SegmentKind.ASCENT,
+            constant_kind=kind
+            if isinstance(kind, SegmentKind.Constant)
+            else SegmentKind.CONSTANT,
+        )
+        if segment.kind is not kind:
+            raise ValueError(
+                f"Stored kind {kind.name} contradicts pressure geometry "
+                f"({segment.start_pressure} → {segment.end_pressure} "
+                f"determines {segment.kind.name})."
+            )
+        return segment
+
+    def to_json(self, indent: int | None = None) -> str:
+        """Serialize to a JSON string."""
+        return json.dumps(self.to_dict(), indent=indent)
+
+    @classmethod
+    def from_json(cls, data: str) -> DiveSegment:
+        """Reconstruct a DiveSegment from a JSON string (see :meth:`from_dict`)."""
+        return cls.from_dict(json.loads(data))
