@@ -8,8 +8,8 @@ Ascent planner
    :members:
    :show-inheritance:
 
-Gas plan, consumption, and reserves
------------------------------------
+Gas plan, consumption, reserves, and oxygen exposure
+----------------------------------------------------
 
 .. automodule:: diveplan.planning.gas_plan
    :members:

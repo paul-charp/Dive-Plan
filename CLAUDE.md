@@ -38,10 +38,9 @@ Layering (imports flow strictly downward; `core/` never imports from upper layer
 core/          Pressure, Gas, DiveSegment, DiveConfig — value objects + config
 dive/dive_profile.py  DiveProfile (builder/validation/timeline/iter_samples) — core only
 models/        deco models (BaseDecoModel[StateT], Bühlmann family, VPM-B)
-planning/      plan_ascent, GasPlan, gas_consumption, rock_bottom — consumes models
+planning/      plan_ascent, GasPlan, consumption/rock-bottom/CNS/OTU — consumes models
 dive/dive.py   Dive — top of the stack (profile + models + planning)
 dive/dive_report.py   DiveReport (pure data) + dive/formatters/ (console, json, subsurface XML)
-dive/oxygen.py CNS (NOAA table) and OTU accumulation over segments
 registry.py    entry-point plugin discovery for deco models
 ```
 
@@ -90,7 +89,7 @@ Plugin discovery: entry-point group **`diveplan.deco_models`** (single source of
 
 ### Report layer
 
-`DiveReport.from_dive(dive)` is pure data: schedule rows + gas consumption (surface litres, exact per linear segment), CNS/OTU (`dive/oxygen.py`), rock bottom at max depth, and optional `TtsVariations` (the "+1 m / +1 min" figures — compute them on the *bottom* dive via `Dive.tts_variations()`, they are meaningless on a full dive with deco). Formatters (`BaseFormatter.format(report) -> str`) are presentation-only; entry-point group `diveplan.formatters` (console/json/subsurface). Consumption/CNS/OTU take `Iterable[DiveSegment]`, so they work on plans as well as profiles.
+`DiveReport.from_dive(dive)` is pure data: schedule rows + gas consumption (surface litres, exact per linear segment), CNS/OTU (`planning/gas_plan.py`), rock bottom at max depth, and optional `TtsVariations` (the "+1 m / +1 min" figures — compute them on the *bottom* dive via `Dive.tts_variations()`, they are meaningless on a full dive with deco). Formatters (`BaseFormatter.format(report) -> str`) are presentation-only; entry-point group `diveplan.formatters` (console/json/subsurface). Consumption/CNS/OTU take `Iterable[DiveSegment]`, so they work on plans as well as profiles.
 
 ### Known state / gotchas
 

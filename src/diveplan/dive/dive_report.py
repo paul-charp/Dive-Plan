@@ -14,9 +14,14 @@ from diveplan.core.gas import Gas
 from diveplan.core.pressure import Pressure
 from diveplan.dive.dive_profile import DiveProfile
 from diveplan.dive.dive import Dive, TtsVariations
-from diveplan.dive.oxygen import cns_percent, otu
 from diveplan.models.base import DecoState
-from diveplan.planning.gas_plan import GasPlan, gas_consumption, rock_bottom
+from diveplan.planning.gas_plan import (
+    GasPlan,
+    cns_percent,
+    gas_consumption,
+    otu,
+    rock_bottom,
+)
 
 __all__ = ["DiveReport", "ReportRow"]
 

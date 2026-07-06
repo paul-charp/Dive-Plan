@@ -307,14 +307,6 @@ Subsurface dive-log XML formatter (experimental).
   - `format(self, report: DiveReport) -> str`  — Render the report as a Subsurface dive-log XML string.
   attrs: `NAME = 'subsurface'; SAMPLE_STEP = timedelta(seconds=10)`
 
-## `src/diveplan/dive/oxygen.py`
-Oxygen-exposure tracking: NOAA CNS clock and REPEX OTUs.
-`__all__ = ['cns_percent', 'otu', 'NOAA_CNS_LIMITS']`
-- `_cns_limit_minutes(ppo2_bar: float) -> float | None`  — NOAA limit at `ppo2_bar`, linearly interpolated; None below the floor.
-- `_iter_ppo2(segments: Iterable[DiveSegment], step: timedelta) -> Iterable[tuple[float, float]]`  — Yield (minutes, ppO2 bar) exposures: one per constant segment, midpoint
-- `cns_percent(segments: Iterable[DiveSegment], *, step: timedelta = timedelta(seconds=10)) -> float`  — CNS oxygen-toxicity clock over `segments`, in percent (100 = NOAA limit).
-- `otu(segments: Iterable[DiveSegment], *, step: timedelta = timedelta(seconds=10)) -> float`  — Pulmonary oxygen-toxicity units (REPEX) accumulated over `segments`.
-
 ## `src/diveplan/models/__init__.py`
 (empty stub)
 
@@ -446,7 +438,7 @@ Ascent planner: compute the decompression schedule from a model state.
 
 ## `src/diveplan/planning/gas_plan.py`
 Gas plan: carried gases, selection, consumption, and reserve planning.
-`__all__ = ['GasPlan', 'gas_consumption', 'rock_bottom']`
+`__all__ = ['GasPlan', 'gas_consumption', 'rock_bottom', 'cns_percent', 'otu', 'NOAA_CNS_LIMITS']`
 ### class `GasPlan` — An ordered collection of carried gases with depth-based selection.
   `__slots__ = ('_gases',)`
   - `__init__(self, gases: Iterable[Gas | str])`
@@ -456,6 +448,10 @@ Gas plan: carried gases, selection, consumption, and reserve planning.
   dunders: `__repr__`
 - `gas_consumption(segments: Iterable[DiveSegment]) -> dict[Gas, float]`  — Surface litres of each gas consumed over `segments`.
 - `rock_bottom(depth: Pressure | str | float, *, divers: int = 2) -> float`  — Minimum gas reserve (surface litres) at `depth` for an emergency.
+- `_cns_limit_minutes(ppo2_bar: float) -> float | None`  — NOAA limit at `ppo2_bar`, linearly interpolated; None below the floor.
+- `_iter_ppo2(segments: Iterable[DiveSegment], step: timedelta) -> Iterable[tuple[float, float]]`  — Yield (minutes, ppO2 bar) exposures: one per constant segment, midpoint
+- `cns_percent(segments: Iterable[DiveSegment], *, step: timedelta = timedelta(seconds=10)) -> float`  — CNS oxygen-toxicity clock over `segments`, in percent (100 = NOAA limit).
+- `otu(segments: Iterable[DiveSegment], *, step: timedelta = timedelta(seconds=10)) -> float`  — Pulmonary oxygen-toxicity units (REPEX) accumulated over `segments`.
 
 ## `src/diveplan/registry.py`
 Entry-point plugin discovery for decompression models.

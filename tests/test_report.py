@@ -27,11 +27,16 @@ from diveplan.dive.formatters import (
     JsonFormatter,
     SubsurfaceXmlFormatter,
 )
-from diveplan.dive.oxygen import cns_percent, otu
 from diveplan.models.buhlmann.common import Gradient
 from diveplan.models.buhlmann.zhl16 import ZHL16C
 from diveplan.planning.ascent_plan import plan_ascent
-from diveplan.planning.gas_plan import GasPlan, gas_consumption, rock_bottom
+from diveplan.planning.gas_plan import (
+    GasPlan,
+    cns_percent,
+    gas_consumption,
+    otu,
+    rock_bottom,
+)
 
 AIR = Gas.air()
 EAN50 = Gas.nitrox(0.50)
