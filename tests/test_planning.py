@@ -55,6 +55,10 @@ class TestGasPlan:
         plan = GasPlan([AIR, EAN50, AIR])
         assert plan.gases == (AIR, EAN50)
 
+    def test_accepts_gas_names(self):
+        assert GasPlan(["air", "ean50"]).gases == (AIR, EAN50)
+        assert GasPlan(["tx21/35", AIR]).gases == (Gas.trimix(0.21, 0.35), AIR)
+
     def test_breathability_window(self):
         # EAN50 at 21 m: ppO2 ≈ 1.56 bar — inside the 1.6 deco limit.
         assert GasPlan.is_breathable(EAN50, Pressure.from_depth_m(21))
@@ -126,6 +130,13 @@ class TestPlanAscentNoDeco:
     def test_already_at_surface(self):
         plan = plan_ascent(ZHL16C(), Pressure.surface(), AIR)
         assert plan == []
+
+    def test_friendly_argument_coercion(self):
+        # Depths as "12 m" strings, gases by name — like the fluent builders.
+        model = loaded_model(12, 10, Gradient(1.0, 1.0))
+        plan = plan_ascent(model, "12 m", "air")
+        assert plan[0].start_pressure == Pressure.from_depth_m(12)
+        assert plan[0].gas == AIR
 
     def test_input_model_not_mutated(self):
         model = loaded_model(40, 25, Gradient(0.3, 0.7))

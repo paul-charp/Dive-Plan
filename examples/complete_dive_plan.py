@@ -62,13 +62,13 @@ print(
 print(f"deco ppO2 limit : {cfg.gas.deco_ppo2_bar} bar")
 
 # Scoped override (fresh water, altitude...) — nestable, thread-safe:
-sea_level_bar = Pressure.from_depth_m(30).bar
+sea_level_bar = Pressure.from_str("30 m").bar
 
 altitude = DiveConfig()
 altitude.physics.surface_pressure_mbar = 900
 altitude.physics.water_density = 1.0
 with altitude:
-    altitude_bar = Pressure.from_depth_m(30).bar
+    altitude_bar = Pressure.from_str("30 m").bar
 print(
     f"30 m of water column = {altitude_bar:.3f} bar at altitude/fresh water, "
     f"{sea_level_bar:.3f} bar at sea level/salt"
@@ -80,12 +80,13 @@ print()
 # ---------------------------------------------------------------------------
 print("=== 2. Gases ===")
 
-air = Gas.air()
-ean50 = Gas.from_name("ean50")  # or Gas.nitrox(0.50)
+# Gases parse from names: "air", "ean50"/"nx50", "tx21/35", "oxygen".
+air = Gas.from_name("air")
+ean50 = Gas.from_name("ean50")
 
 print(f"EAN50 MOD @1.6 bar : {ean50.mod(ppo2_bar=1.6).depth_m:.1f} m")
 print(f"best mix for 30 m  : {air.best_mix(30)}")
-print(f"air END at 40 m    : {air.end(Pressure.from_depth_m(40)).depth_m:.1f} m")
+print(f"air END at 40 m    : {air.end(Pressure.from_str('40 m')).depth_m:.1f} m")
 print()
 
 # ---------------------------------------------------------------------------
@@ -110,7 +111,7 @@ print()
 print("=== 4. DiveResult queries (ZHL-16C, GF 30/70) ===")
 
 zhl = ZHL16C(gradient=Gradient(0.3, 0.7))
-carried = GasPlan([air, ean50])
+carried = GasPlan(["air", "ean50"])  # gases by name, like everywhere else
 
 result = DiveResult.run(bottom, zhl)
 

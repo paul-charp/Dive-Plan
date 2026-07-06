@@ -435,14 +435,14 @@ Ascent planner: compute the decompression schedule from a model state.
 ### class `AscentNotConvergingError` (RuntimeError) — The stop loop failed to clear the next target within the iteration cap.
 - `_ceiling(model: BaseDecoModel[Any], target: Pressure, first_stop: Optional[Pressure]) -> Pressure`  — Model ceiling for an ascent-to-`target` test.
 - `_next_targets(current: Pressure) -> list[Pressure]`  — Candidate ascent targets from shallowest to deepest: the surface, then
-- `plan_ascent(model: BaseDecoModel[Any], start_pressure: Pressure, gas: Gas, gas_plan: Optional[GasPlan] = None, clock_offset: timedelta | float = timedelta(0)) -> list[DiveSegment]`  — Plan the decompression ascent from the given position and model state.
+- `plan_ascent(model: BaseDecoModel[Any], start_pressure: Pressure | str | float, gas: Gas | str, gas_plan: Optional[GasPlan] = None, clock_offset: timedelta | float = timedelta(0)) -> list[DiveSegment]`  — Plan the decompression ascent from the given position and model state.
 
 ## `src/diveplan/planning/gas_plan.py`
 Gas plan: carried gases, selection, consumption, and reserve planning.
 `__all__ = ['GasPlan', 'gas_consumption', 'rock_bottom']`
 ### class `GasPlan` — An ordered collection of carried gases with depth-based selection.
   `__slots__ = ('_gases',)`
-  - `__init__(self, gases: Iterable[Gas])`
+  - `__init__(self, gases: Iterable[Gas | str])`
   - @property `gases(self) -> tuple[Gas, ...]`  — The carried gases (duplicates removed, insertion order).
   - @staticmethod `is_breathable(gas: Gas, pressure: Pressure) -> bool`  — Whether `gas` is within the configured deco ppO2 window here.
   - `best_gas_at(self, pressure: Pressure) -> Optional[Gas]`  — Richest breathable gas at `pressure`, or None if none qualifies.
@@ -483,7 +483,7 @@ Gas plan: carried gases, selection, consumption, and reserve planning.
 - `test_dive_result.py` (20 tests) — TestIterSamples, TestDiveResultRun, TestDiveResultQueries
 - `test_dive_segment.py` (59 tests) — TestDiveSegmentConstruction, TestDiveSegmentProperties, TestDiveSegmentInterpolation, TestDiveSegmentSplitting, TestDiveSegmentMerging, TestDiveSegmentContinuity, TestDiveSegmentIteration, TestDiveSegmentMagicMethods, TestDiveSegmentImmutability, TestDiveSegmentSerialization
 - `test_gas.py` (61 tests) — TestRawConstruction, TestNamedConstructors, TestFromName, TestPartialPressures, TestMod, TestEnd, TestBestMix, TestEqualityAndHash, TestStringRepresentation
-- `test_planning.py` (16 tests) — TestGasPlan, TestPlanAscentNoDeco, TestPlanAscentDeco
+- `test_planning.py` (18 tests) — TestGasPlan, TestPlanAscentNoDeco, TestPlanAscentDeco
 - `test_pressure.py` (70 tests) — TestConstruction, TestProperties, TestAltConstructorsAndProperties, TestStringParsing, TestImmutability, TestAddition, TestSubtraction, TestMultiplication, TestDivision, TestOrdering, TestHashing, TestDisplay
 - `test_report.py` (21 tests) — TestGasConsumption, TestRockBottom, TestOxygenExposure, TestTtsVariations, TestDiveReport
 - `test_vpm.py` (23 tests) — TestBubbleMechanics, TestVpmBModel, TestVpmBRegistry

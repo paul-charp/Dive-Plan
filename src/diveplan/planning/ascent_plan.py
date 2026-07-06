@@ -33,6 +33,7 @@ from diveplan.core.pressure import Pressure
 from diveplan.models.base import BaseDecoModel
 from diveplan.models.buhlmann.model import BuhlmannModel
 from diveplan.planning.gas_plan import GasPlan
+from diveplan.utils.conversions import coerce_depth_to_pressure, coerce_gas
 
 __all__ = ["plan_ascent", "AscentNotConvergingError"]
 
@@ -75,8 +76,8 @@ def _next_targets(current: Pressure) -> list[Pressure]:
 
 def plan_ascent(
     model: BaseDecoModel[Any],
-    start_pressure: Pressure,
-    gas: Gas,
+    start_pressure: Pressure | str | float,
+    gas: Gas | str,
     gas_plan: Optional[GasPlan] = None,
     clock_offset: timedelta | float = timedelta(0),
 ) -> list[DiveSegment]:
@@ -85,8 +86,9 @@ def plan_ascent(
     Args:
         model: Deco model holding the tissue state at `start_pressure`.
             Cloned internally — the caller's instance is not touched.
-        start_pressure: Current ambient pressure.
-        gas: Gas currently being breathed.
+        start_pressure: Current position — a Pressure, a "40 m"-style
+            string, or bare metres.
+        gas: Gas currently being breathed — a Gas or a name like "ean50".
         gas_plan: Gases available for switches during the ascent. Defaults
             to just the current gas.
         clock_offset: Dive runtime at which this ascent starts (minutes or
@@ -109,6 +111,8 @@ def plan_ascent(
     gas_limits = DiveConfig.current().gas
     surface = Pressure.surface()
 
+    start_pressure = coerce_depth_to_pressure(start_pressure)
+    gas = coerce_gas(gas)
     if gas_plan is None:
         gas_plan = GasPlan([gas])
     if not isinstance(clock_offset, timedelta):

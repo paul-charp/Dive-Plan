@@ -18,7 +18,7 @@ from diveplan.core.config import DiveConfig
 from diveplan.core.dive_segment import DiveSegment, SegmentKind
 from diveplan.core.gas import Gas
 from diveplan.core.pressure import Pressure
-from diveplan.utils.conversions import coerce_depth_to_pressure
+from diveplan.utils.conversions import coerce_depth_to_pressure, coerce_gas
 
 __all__ = ["GasPlan", "gas_consumption", "rock_bottom"]
 
@@ -31,17 +31,22 @@ _DECO_KINDS = (
 
 
 class GasPlan:
-    """An ordered collection of carried gases with depth-based selection."""
+    """An ordered collection of carried gases with depth-based selection.
+
+    Gases may be given as :class:`Gas` objects or names — ``GasPlan(["air",
+    "ean50"])`` — parsed via :meth:`Gas.from_name`.
+    """
 
     __slots__ = ("_gases",)
 
     _gases: tuple[Gas, ...]
 
-    def __init__(self, gases: Iterable[Gas]):
+    def __init__(self, gases: Iterable[Gas | str]):
         unique: list[Gas] = []
         for gas in gases:
-            if gas not in unique:
-                unique.append(gas)
+            mix = coerce_gas(gas)
+            if mix not in unique:
+                unique.append(mix)
         if not unique:
             raise ValueError("GasPlan needs at least one gas.")
         self._gases = tuple(unique)
