@@ -12,7 +12,6 @@ sequence of segments — a profile's or a plan's) and :func:`rock_bottom`
 """
 
 from collections.abc import Iterable
-from typing import Optional
 
 from diveplan.core.config import DiveConfig
 from diveplan.core.dive_segment import DiveSegment, SegmentKind
@@ -63,7 +62,7 @@ class GasPlan:
         ppo2 = gas.ppo2(pressure).bar
         return limits.min_ppo2_bar <= ppo2 <= limits.deco_ppo2_bar
 
-    def best_gas_at(self, pressure: Pressure) -> Optional[Gas]:
+    def best_gas_at(self, pressure: Pressure) -> Gas | None:
         """Richest breathable gas at `pressure`, or None if none qualifies."""
         candidates = [g for g in self._gases if self.is_breathable(g, pressure)]
         if not candidates:

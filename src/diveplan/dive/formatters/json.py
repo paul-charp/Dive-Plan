@@ -21,6 +21,7 @@ class JsonFormatter(BaseFormatter):
         self.indent = indent
 
     def format(self, report: DiveReport) -> str:
+        """Render the report as a JSON document string."""
         variations = None
         if report.tts_variations is not None:
             variations = {

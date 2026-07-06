@@ -1,9 +1,18 @@
+"""Dive segment: one leg of a dive profile.
+
+A :class:`DiveSegment` is an immutable value — start/end pressure, duration,
+gas, and a :class:`SegmentKind` — with linear pressure interpolation inside
+it. Profiles are sequences of segments; models integrate them; planners emit
+them. Segments carry **no results** (tissue states, ceilings): those live in
+the :class:`~diveplan.dive.dive.Dive` layer.
+"""
+
 import json
 import math
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from datetime import timedelta
 from enum import Enum, auto
-from typing import Any, Iterator
+from typing import Any
 
 from diveplan.core.gas import Gas
 from diveplan.core.pressure import Pressure
@@ -16,21 +25,33 @@ __all__ = ["SegmentKind", "DiveSegment"]
 
 
 class SegmentKind:
-    """Kind of dive segment, used for categorization and special handling in algorithms.
-    Descent, ascent, and constant depth segments are categorized separately, with sub-kinds for different types of ascents and constant depth segments.
-    Use `SegmentKind.DESCENT`, `SegmentKind.ASCENT`, and `SegmentKind.CONSTANT` for convenience when creating segments with default kinds.
-    `SegmentKind.Members` is the union of all possible segment kinds for type annotations.
-    `SegmentKind.Constant.STOP in SegmentKind.Constant` returns `True`, allowing for easy checks of whether a segment belongs to a certain parent kind (descent, ascent, or constant) regardless of sub-kind.
+    """Namespace of segment-kind enums, grouped by direction of travel.
+
+    The three sub-enums (:class:`Descent`, :class:`Ascent`, :class:`Constant`)
+    categorize a segment for algorithms: planners emit ``DECO_ASCENT`` legs
+    and ``STOP`` holds, gas accounting bills deco kinds at the deco SAC, and
+    ``GAS_SWITCH`` marks the one constant-depth kind allowed a zero duration.
+
+    Membership in a parent group tests naturally:
+    ``segment.kind in SegmentKind.Constant``. ``SegmentKind.Members`` is the
+    union of all kinds for annotations, and ``DESCENT``/``ASCENT``/``CONSTANT``
+    are the conventional defaults for each group.
     """
 
     class Descent(Enum):
+        """Downward traverses (start pressure below end pressure)."""
+
         DESCENT = auto()
 
     class Ascent(Enum):
+        """Upward traverses: planned deco legs vs. forced (direct) ascents."""
+
         FORCED_ASCENT = auto()
         DECO_ASCENT = auto()
 
     class Constant(Enum):
+        """Constant-depth segments: bottom time, deco stops, gas switches."""
+
         BOTTOM = auto()
         STOP = auto()
         GAS_SWITCH = auto()
@@ -61,9 +82,13 @@ class SegmentKind:
 
 
 class DiveSegment:
-    """A segment of a dive profile with a start and end pressure, duration, and gas.
-    Immutable. __slots__ for memory efficiency in batch simulation.
+    """One leg of a dive profile: pressures, duration, gas, and kind.
 
+    Immutable value object (``__slots__`` + setattr guards) — profiles copy
+    cheaply because segments never change. Pressure varies linearly between
+    the endpoints; the interpolation helpers (``pressure_at_time`` and
+    friends) are exact under that assumption. The kind is derived from the
+    pressure direction, refined by ``ascent_kind``/``constant_kind``.
     """
 
     __slots__ = "start_pressure", "end_pressure", "duration", "gas", "kind"

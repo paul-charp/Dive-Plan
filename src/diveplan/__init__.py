@@ -61,14 +61,17 @@ class _ConfigProxy:
 
     @property
     def gas(self) -> _GasConfig:
+        """Gas limits and SAC rates of the active config."""
         return DiveConfig.current().gas
 
     @property
     def physics(self) -> _PhysicsConfig:
+        """Physical environment of the active config."""
         return DiveConfig.current().physics
 
     @property
     def planning(self) -> _DivePlanningConfig:
+        """Rates and stop parameters of the active config."""
         return DiveConfig.current().planning
 
     def __repr__(self) -> str:

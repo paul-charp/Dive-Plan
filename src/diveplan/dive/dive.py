@@ -19,8 +19,9 @@ One profile can be run under any number of models/settings and the dives
 compared — nothing here mutates the profile or the caller's model.
 """
 
+from collections.abc import Iterator
 from datetime import timedelta
-from typing import Any, Iterator, NamedTuple
+from typing import Any, NamedTuple
 
 from diveplan.core.config import DiveConfig
 from diveplan.core.dive_segment import DiveSegment, SegmentKind

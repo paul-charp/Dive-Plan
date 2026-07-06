@@ -56,6 +56,7 @@ class ConsoleFormatter(BaseFormatter):
         return "\n".join([_SCHEDULE_HEADER, *map(_row_line, rows)])
 
     def format(self, report: DiveReport) -> str:
+        """Render the full report: header, schedule table, totals block."""
         lines = [
             f"Dive plan — {report.model_name}",
             f"runtime {_minutes(report.runtime).strip()}, "

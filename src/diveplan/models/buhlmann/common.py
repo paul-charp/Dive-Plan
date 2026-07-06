@@ -18,7 +18,6 @@ GF 30/85); ``Gradient(1.0, 1.0)`` is raw Bühlmann.
 """
 
 from datetime import timedelta
-from typing import Optional
 
 from diveplan.core.gas import Gas
 from diveplan.core.pressure import Pressure
@@ -145,8 +144,8 @@ class Compartment:
         a_he: float,
         b_n2: float,
         b_he: float,
-        ppn2: Optional[Pressure] = None,
-        pphe: Optional[Pressure] = None,
+        ppn2: Pressure | None = None,
+        pphe: Pressure | None = None,
     ):
         if ht_n2 <= 0 or ht_he <= 0:
             raise ValueError(f"Half-times must be > 0, got {ht_n2=}, {ht_he=}.")

@@ -24,7 +24,7 @@ are not applied yet — its schedules use the conservative pre-CVA gradients.
 """
 
 from datetime import timedelta
-from typing import Any, Optional
+from typing import Any
 
 from diveplan.core.config import DiveConfig
 from diveplan.core.dive_segment import DiveSegment, SegmentKind
@@ -49,7 +49,7 @@ class AscentNotConvergingError(RuntimeError):
 def _ceiling(
     model: BaseDecoModel[Any],
     target: Pressure,
-    first_stop: Optional[Pressure],
+    first_stop: Pressure | None,
 ) -> Pressure:
     """Model ceiling for an ascent-to-`target` test.
 
@@ -78,7 +78,7 @@ def plan_ascent(
     model: BaseDecoModel[Any],
     start_pressure: Pressure | str | float,
     gas: Gas | str,
-    gas_plan: Optional[GasPlan] = None,
+    gas_plan: GasPlan | None = None,
     clock_offset: timedelta | float = timedelta(0),
 ) -> list[DiveSegment]:
     """Plan the decompression ascent from the given position and model state.
@@ -121,10 +121,11 @@ def plan_ascent(
     work = model.copy()
     current = start_pressure
     current_gas = gas
-    first_stop: Optional[Pressure] = None
+    first_stop: Pressure | None = None
     plan: list[DiveSegment] = []
 
     def runtime_now() -> timedelta:
+        """Dive-clock runtime at the current end of the plan."""
         return clock_offset + sum((s.duration for s in plan), timedelta(0))
 
     def wait_duration() -> timedelta:
@@ -138,10 +139,12 @@ def plan_ascent(
         return timedelta(seconds=remaining)
 
     def integrate_and_append(segment: DiveSegment) -> None:
+        """Advance the working model through `segment` and record it."""
         work.integrate_segment(segment)
         plan.append(segment)
 
     def ascend_to(target: Pressure) -> None:
+        """Emit an ascent leg to `target`, merging continuation legs."""
         depth_change = current.depth_m - target.depth_m
         leg = DiveSegment(
             current,
@@ -160,6 +163,7 @@ def plan_ascent(
             plan.append(leg)
 
     def reachable(target: Pressure) -> bool:
+        """Whether the ceiling permits ascending to `target` right now."""
         return _ceiling(work, target, first_stop) <= target
 
     for _ in range(_MAX_ITERATIONS):

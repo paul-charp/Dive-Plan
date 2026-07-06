@@ -8,7 +8,7 @@ profiles directly, so a new output format is a single class.
 """
 
 from datetime import timedelta
-from typing import NamedTuple, Optional
+from typing import NamedTuple
 
 from diveplan.core.gas import Gas
 from diveplan.core.pressure import Pressure
@@ -61,7 +61,7 @@ class DiveReport:
     cns: float
     otus: float
     rock_bottom_l: float
-    tts_variations: Optional[TtsVariations]
+    tts_variations: TtsVariations | None
 
     def __init__(
         self,
@@ -75,7 +75,7 @@ class DiveReport:
         cns: float,
         otus: float,
         rock_bottom_l: float,
-        tts_variations: Optional[TtsVariations],
+        tts_variations: TtsVariations | None,
     ):
         self.profile = profile
         self.model_name = model_name
@@ -93,8 +93,8 @@ class DiveReport:
         cls,
         dive: Dive[DecoState],
         *,
-        gas_plan: Optional[GasPlan] = None,
-        tts_variations: Optional[TtsVariations] = None,
+        gas_plan: GasPlan | None = None,
+        tts_variations: TtsVariations | None = None,
     ) -> "DiveReport":
         """Assemble a report from a computed dive.
 

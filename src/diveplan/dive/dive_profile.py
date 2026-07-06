@@ -1,10 +1,27 @@
+"""Dive profile: the geometric plan of a dive.
+
+A :class:`DiveProfile` is a validated sequence of
+:class:`~diveplan.core.dive_segment.DiveSegment` — pure input geometry,
+deliberately free of model results. It offers three ways of working:
+
+- **building** — fluent methods (``descend_to("40 m")``, ``stay``,
+  ``switch_gas("ean50")``…) and explicit segment surgery, governed by a
+  :class:`ProfileBuilderPolicy`;
+- **validation & repair** — problems are returned as pure-data
+  :class:`ProfileValidationError` descriptors; canonical repairs live on
+  ``fix``/``fix_all``;
+- **timeline** — address the profile by runtime (``pressure_at(23)``), and
+  sample it for integration via ``iter_samples`` (the single sampling
+  authority used by models and visualization).
+"""
+
 from __future__ import annotations
 
 import json
 from collections.abc import Iterator, Mapping
 from datetime import timedelta
 from enum import Enum, auto
-from typing import Any, NamedTuple, Optional
+from typing import Any, NamedTuple
 
 from ..core.config import DiveConfig
 from ..core.dive_segment import DiveSegment, SegmentKind
@@ -59,7 +76,7 @@ class ProfileValidationError(ValueError):
         self,
         message: str,
         *,
-        segment_index: Optional[int] = None,
+        segment_index: int | None = None,
         segments: tuple[DiveSegment, ...] = (),
     ):
         super().__init__(message)
@@ -278,7 +295,7 @@ class DiveProfile:
         return self._builder_policy
 
     def copy(
-        self, *, override_policy: Optional[ProfileBuilderPolicy] = None
+        self, *, override_policy: ProfileBuilderPolicy | None = None
     ) -> DiveProfile:
         """Create a copy of the dive profile.
 
@@ -446,7 +463,7 @@ class DiveProfile:
 
     def _seam_error(
         self, a: DiveSegment, b: DiveSegment, index: int
-    ) -> Optional[ProfileValidationError]:
+    ) -> ProfileValidationError | None:
         """Return the most fundamental continuity error at the seam (a → b), or None.
 
         Pressure continuity is a prerequisite for a gas switch, so a depth
@@ -657,7 +674,7 @@ class DiveProfile:
         self,
         depth: Pressure | str | float,
         *,
-        rate: Optional[float] = None,
+        rate: float | None = None,
         gas: Gas | str | None = None,
     ) -> DiveProfile:
         """Append a descent from the current position to `depth`.
@@ -689,7 +706,7 @@ class DiveProfile:
         self,
         depth: Pressure | str | float,
         *,
-        rate: Optional[float] = None,
+        rate: float | None = None,
         gas: Gas | str | None = None,
         kind: SegmentKind.Ascent = SegmentKind.ASCENT,
     ) -> DiveProfile:
@@ -1126,7 +1143,7 @@ class DiveProfile:
         profile._segments = [DiveSegment.from_dict(entry) for entry in data["segments"]]
         return profile
 
-    def to_json(self, path: Optional[str] = None, indent: int = 2) -> str:
+    def to_json(self, path: str | None = None, indent: int = 2) -> str:
         """Serialize to a JSON string, optionally writing to a file."""
         data = json.dumps(self.to_dict(), indent=indent)
         if path:
@@ -1135,9 +1152,7 @@ class DiveProfile:
         return data
 
     @classmethod
-    def from_json(
-        cls, data: Optional[str] = None, path: Optional[str] = None
-    ) -> DiveProfile:
+    def from_json(cls, data: str | None = None, path: str | None = None) -> DiveProfile:
         """Deserialize from a JSON string or file path (see :meth:`from_dict`)."""
         if path:
             with open(path, encoding="utf-8") as f:

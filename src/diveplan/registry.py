@@ -1,3 +1,18 @@
+"""Entry-point plugin discovery for decompression models.
+
+Third-party packages register model classes under the
+``diveplan.deco_models`` entry-point group in their ``pyproject.toml``::
+
+    [project.entry-points."diveplan.deco_models"]
+    mymodel = "my_package.model:MyModel"
+
+The module-level :data:`registry` singleton discovers every entry point in
+the group **eagerly on first access** — never register an entry point whose
+module does not exist yet, as one dangling reference breaks all lookups.
+:meth:`PluginRegistry.register_model` is the manual escape hatch for tests
+and notebooks.
+"""
+
 from functools import cached_property
 from importlib.metadata import entry_points
 from typing import TYPE_CHECKING, Any
@@ -9,6 +24,13 @@ _ENTRY_POINT_GROUP = "diveplan.deco_models"
 
 
 class PluginNotFoundError(KeyError):
+    """No plugin is registered under the requested name.
+
+    Attributes:
+        name: The name that was looked up.
+        available: Names of all currently registered plugins.
+    """
+
     def __init__(self, name: str, available: list[str]) -> None:
         hint = (
             f"No decompression model plugin named '{name}'.\n"
@@ -21,10 +43,16 @@ class PluginNotFoundError(KeyError):
 
 
 class PluginInvalidError(TypeError):
-    pass
+    """A discovered or registered plugin does not subclass BaseDecoModel."""
 
 
 class PluginRegistry:
+    """Deco-model lookup: entry-point discovery plus manual registration.
+
+    Discovery runs once and is cached; :meth:`invalidate` forces a re-scan.
+    Manual registrations shadow discovered plugins of the same name.
+    """
+
     def __init__(self) -> None:
         # Manual overrides live here — separate from the cached discovery.
         # Checked first so local overrides win over installed packages.

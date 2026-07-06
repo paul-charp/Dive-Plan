@@ -44,6 +44,7 @@ class SubsurfaceXmlFormatter(BaseFormatter):
         self.planned_at = planned_at if planned_at is not None else datetime.now()
 
     def format(self, report: DiveReport) -> str:
+        """Render the report as a Subsurface dive-log XML string."""
         profile = report.profile
         segments = profile.segments
 
