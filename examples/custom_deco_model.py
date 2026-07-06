@@ -45,9 +45,11 @@ class FastTissues(BuhlmannModel):
 
 registry.register_model("fast5", FastTissues)
 
-model_cls = registry.model("fast5")
+# The registry returns the class typed as the generic BaseDecoModel — use
+# your own class for its specific API, the registry for discovery.
+assert registry.model("fast5") is FastTissues
 print(f"registered models : {sorted(registry.all_models())}")
-print(f"fast5 compartments: {model_cls().compartment_count}")
+print(f"fast5 compartments: {FastTissues().compartment_count}")
 print()
 
 # ---------------------------------------------------------------------------
