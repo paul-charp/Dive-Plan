@@ -1,28 +1,70 @@
 """
 diveplan — dive planning and decompression calculation library.
 
-**Core types**
+Everything listed in ``__all__`` below is the stable public API; import it
+from the package root. Submodule paths are implementation detail unless
+documented otherwise.
+
+**Core value types**
 
 * ``Pressure`` — integer-millibar pressure value type
 * ``Gas`` — O2/He/N2 breathing mixture
 * ``DiveSegment`` / ``SegmentKind`` — a single leg of a dive profile
+
+**Configuration**
+
 * ``DiveConfig`` — physics, planning, and gas configuration
+* ``diveconfig`` — proxy forwarding attribute access to ``DiveConfig.current()``
 
-**Config proxy**
+**Profile building**
 
-* ``diveconfig`` — forwards attribute access to ``DiveConfig.current()``
+* ``DiveProfile`` — fluent builder, validation & repair, timeline queries
+* ``ProfileBuilderPolicy`` — raise / allow / autofix during construction
+* ``ProfileValidationError`` — base of the validation-error family
+  (concrete subclasses importable from ``diveplan.dive.dive_profile``)
 
-**Extension points** (import directly from submodules)
+**Running dives**
 
-* ``diveplan.registry`` — ``PluginRegistry``
+* ``Dive`` — a deco model's run over a profile; ceilings, TTS, oxygen clocks
+* ``TtsVariations`` — the "+1 m / +1 min" TTS sensitivity pair
 
-The planning, deco-model, and dive/report layers are still under construction;
-their public symbols will be re-exported here as they land.
+**Ascent and gas planning**
+
+* ``GasPlan`` — carried gases with depth-based selection
+* ``AscentNotConvergingError`` — raised when a deco stop cannot clear
+
+Ascents are planned from a ``Dive``: ``dive.plan_ascent(gas_plan)`` returns
+the deco schedule as segments, ``dive.with_ascent(gas_plan)`` a completed
+dive. The underlying pure function lives in ``diveplan.planning`` for the
+advanced case of planning from a bare model state.
+
+**Reports**
+
+* ``DiveReport`` — pure-data summary of a computed dive
+* ``ReportRow`` — one schedule line of a report
+
+**Plugin authoring**
+
+* ``BaseDecoModel`` / ``DecoState`` — deco-model plugin contract
+  (entry-point group ``diveplan.deco_models``)
+* ``BaseFormatter`` — report-formatter plugin contract
+  (entry-point group ``diveplan.formatters``)
+
+**Plugin lookup** — the one documented submodule import::
+
+    from diveplan.registry import registry
+
+    ZHL16C = registry.model("zhl16c")
+    ConsoleFormatter = registry.formatter("console")
+
+Built-in model and formatter classes are looked up through the registry;
+import them directly only for API beyond the plugin contract (e.g.
+``diveplan.models.buhlmann.Gradient``, rich's ``console=`` parameter).
 """
 
 import logging
 
-# -- core types ----------------------------------------------------------------
+# -- core value types --------------------------------------------------------
 from diveplan.core.config import (
     DiveConfig,
     _DivePlanningConfig,
@@ -33,11 +75,19 @@ from diveplan.core.dive_segment import DiveSegment, SegmentKind
 from diveplan.core.gas import Gas
 from diveplan.core.pressure import Pressure
 
-# -- dive / planning layers ------------------------------------------------
-from diveplan.dive.dive import Dive
-from diveplan.dive.dive_profile import DiveProfile
-from diveplan.dive.dive_report import DiveReport
-from diveplan.planning.ascent_plan import plan_ascent
+# -- dive / planning / report layers -----------------------------------------
+from diveplan.dive.dive import Dive, TtsVariations
+from diveplan.dive.dive_profile import (
+    DiveProfile,
+    ProfileBuilderPolicy,
+    ProfileValidationError,
+)
+from diveplan.dive.dive_report import DiveReport, ReportRow
+from diveplan.dive.formatters import BaseFormatter
+
+# -- plugin bases -------------------------------------------------------------
+from diveplan.models.base import BaseDecoModel, DecoState
+from diveplan.planning.ascent_plan import AscentNotConvergingError
 from diveplan.planning.gas_plan import GasPlan
 
 # -- config proxy --------------------------------------------------------------
@@ -96,12 +146,23 @@ __all__ = [
     # configuration
     "DiveConfig",
     "diveconfig",
-    # dive / planning layers
-    "Dive",
+    # profile building
     "DiveProfile",
-    "DiveReport",
+    "ProfileBuilderPolicy",
+    "ProfileValidationError",
+    # running dives
+    "Dive",
+    "TtsVariations",
+    # ascent and gas planning
     "GasPlan",
-    "plan_ascent",
+    "AscentNotConvergingError",
+    # reports
+    "DiveReport",
+    "ReportRow",
+    # plugin authoring
+    "BaseDecoModel",
+    "DecoState",
+    "BaseFormatter",
 ]
 
 __version__ = "0.1.0"

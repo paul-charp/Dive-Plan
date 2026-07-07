@@ -15,8 +15,7 @@ DO NOT USE FOR REAL-WORLD DIVE PLANNING — experimental software.
 from collections.abc import Callable
 from typing import Any
 
-from diveplan import Dive, DiveConfig, DiveProfile, GasPlan
-from diveplan.models.base import BaseDecoModel
+from diveplan import BaseDecoModel, Dive, DiveConfig, DiveProfile, GasPlan
 from diveplan.registry import registry
 
 # Models are plugins — look them up by registry name:

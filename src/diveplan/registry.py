@@ -27,6 +27,8 @@ if TYPE_CHECKING:
     from .dive.formatters import BaseFormatter
     from .models.base import BaseDecoModel
 
+__all__ = ["registry", "PluginRegistry", "PluginNotFoundError", "PluginInvalidError"]
+
 _ENTRY_POINT_GROUP = "diveplan.deco_models"
 _FORMATTER_ENTRY_POINT_GROUP = "diveplan.formatters"
 

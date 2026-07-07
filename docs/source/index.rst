@@ -56,6 +56,42 @@ Key ideas
 Runnable, commented examples live in the repository's ``examples/``
 directory, starting with ``examples/complete_dive_plan.py``.
 
+Public API
+----------
+
+Everything stable imports from the package root; submodule paths are
+implementation detail unless documented otherwise:
+
+.. code-block:: python
+
+    from diveplan import (
+        Pressure, Gas, DiveSegment, SegmentKind,     # core value types
+        DiveConfig, diveconfig,                      # configuration (+ live proxy)
+        DiveProfile, ProfileBuilderPolicy,           # profile building
+        ProfileValidationError,                      #   … and its error family base
+        Dive, TtsVariations,                         # running a model over a profile
+        GasPlan,                                     # carried gases & selection
+        AscentNotConvergingError,                    #   … planner failure mode
+        DiveReport, ReportRow,                       # pure-data report
+        BaseDecoModel, DecoState, BaseFormatter,     # plugin authoring contracts
+    )
+
+Deco ascents are planned from a :class:`~diveplan.dive.dive.Dive` —
+``dive.plan_ascent(gas_plan)`` returns the schedule as segments,
+``dive.with_ascent(gas_plan)`` a completed dive. The underlying pure
+function, :func:`~diveplan.planning.ascent_plan.plan_ascent`, lives in
+``diveplan.planning`` for the advanced case of planning from a bare
+model state.
+
+Built-in deco models and report formatters are plugins — get them by name
+through :data:`diveplan.registry.registry`, the one documented submodule
+import (see the quickstart above). Direct class imports are reserved for
+API beyond the plugin contract: family-specific machinery from
+``diveplan.models.buhlmann`` / ``diveplan.models.vpm`` (e.g.
+:class:`~diveplan.models.buhlmann.Gradient`), formatter extras from
+``diveplan.dive.formatters``, and the concrete validation-error
+subclasses from ``diveplan.dive.dive_profile``.
+
 .. toctree::
    :maxdepth: 1
    :caption: Core types
