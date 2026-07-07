@@ -289,6 +289,23 @@ class Gas:
         narcotic_fraction = self._fo2 + self._fn2
         return pressure * narcotic_fraction
 
+    def is_breathable(self, pressure: Pressure) -> bool:
+        """Whether this gas is breathable at the given ambient pressure.
+
+        Breathable means the ppO2 sits within the configured
+        ``[min_ppo2_bar, deco_ppo2_bar]`` window (from
+        :func:`DiveConfig.current`). The *deco* limit is used because
+        this is the gas-switching question — switches happen during the
+        ascent, where the deco ppO2 applies; compare against
+        ``mod(ppo2_bar=...)`` for an explicit working limit.
+
+        Args:
+            pressure: Ambient pressure at depth.
+        """
+        limits = DiveConfig.current().gas
+        ppo2 = self.ppo2(pressure).bar
+        return limits.min_ppo2_bar <= ppo2 <= limits.deco_ppo2_bar
+
     def best_mix(
         self,
         depth: float | Pressure,

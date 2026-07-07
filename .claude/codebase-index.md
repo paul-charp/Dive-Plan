@@ -13,7 +13,7 @@ diveplan — dive planning and decompression calculation library.
   - @property `planning(self) -> _DivePlanningConfig`  — Rates and stop parameters of the active config.
   dunders: `__repr__, __str__`
 - const `diveconfig = _ConfigProxy()`
-`__all__ = ['Pressure', 'Gas', 'DiveSegment', 'SegmentKind', 'DiveConfig', 'diveconfig', 'Dive', 'DiveProfile', 'DiveReport', 'GasPlan', 'plan_ascent']`
+`__all__ = ['Pressure', 'Gas', 'DiveSegment', 'SegmentKind', 'DiveConfig', 'diveconfig', 'DiveProfile', 'ProfileBuilderPolicy', 'ProfileValidationError', 'Dive', 'TtsVariations', 'GasPlan', 'AscentNotConvergingError', 'DiveReport', 'ReportRow', 'BaseDecoModel', 'DecoState', 'BaseFormatter']`
 
 ## `src/diveplan/core/__init__.py`
 Core value objects and configuration for diveplan.
@@ -110,6 +110,7 @@ Gas mix value object for diveplan.
   - `ppn2(self, pressure: Pressure) -> Pressure`  — Return the partial pressure of N2 at the given ambient pressure.
   - `mod(self, *, ppo2_bar: float) -> Pressure`  — Return the maximum operating depth (MOD) for a given ppO2 limit.
   - `end(self, pressure: Pressure) -> Pressure`  — Return the equivalent narcotic depth (END) at the given pressure.
+  - `is_breathable(self, pressure: Pressure) -> bool`  — Whether this gas is breathable at the given ambient pressure.
   - `best_mix(self, depth: float | Pressure, *, trimix: bool = False, hypoxic: bool = False) -> Gas`  — Return the optimal gas mix for the given depth.
   dunders: `__eq__, __hash__, __repr__, __setattr__, __str__`
 
@@ -140,7 +141,7 @@ core/pressure.py — Pressure value type.
   dunders: `__add__, __delattr__, __eq__, __ge__, __gt__, __hash__, __le__, __lt__, __mul__, __repr__, __rmul__, __setattr__, __str__, __sub__, __truediv__, __truediv__, __truediv__`
 
 ## `src/diveplan/dive/__init__.py`
-(empty stub)
+Dive layer: profile geometry, model runs, reports, and formatters.
 
 ## `src/diveplan/dive/dive.py`
 Dive: a deco model run over a profile, queryable and extendable.
@@ -335,7 +336,7 @@ Subsurface dive-log XML formatter.
   attrs: `NAME = 'subsurface'; SAMPLE_STEP = timedelta(seconds=10)`
 
 ## `src/diveplan/models/__init__.py`
-(empty stub)
+Decompression models: plugin contract plus the built-in families.
 
 ## `src/diveplan/models/base.py`
 Decompression model base classes.
@@ -351,7 +352,8 @@ Decompression model base classes.
   - `integrate(self, pressure: Pressure, gas: Gas, dt: timedelta) -> None`  — Advance the model by a single step at the given pressure and gas.
   - @abstract `_integrate_model(self, pressure: Pressure, gas: Gas, dt: timedelta) -> None`  — Advance the model by dt at the given ambient pressure and gas.
   - @abstract `_get_deco_state(self) -> StateT`  — Snapshot the current model state.
-  - @abstract `get_ceiling(self) -> Pressure`  — Return the current ceiling depth.
+  - @abstract `get_ceiling(self) -> Pressure`  — Return the current (conservative) ceiling.
+  - `get_ascent_ceiling(self, target: Pressure, first_stop: Pressure | None = None) -> Pressure`  — Ceiling for testing an ascent to `target` during staged deco.
   - @abstract `set_state(self, state: StateT) -> None`  — Restore the model to a previously snapshotted state (lossless).
   - @abstract `copy(self) -> Self`  — Independent clone with identical configuration and current state.
   attrs: `NAME: ClassVar[str]`
@@ -399,7 +401,9 @@ Generic Bühlmann decompression engine.
   - @property `compartment_count(self) -> int`  — Number of tissue compartments in this model's table.
   - `_integrate_model(self, pressure: Pressure, gas: Gas, dt: timedelta) -> None`
   - `_get_deco_state(self) -> BuhlmannState`
-  - `get_ceiling(self, gradient_factor: float | None = None) -> Pressure`  — Minimum tolerated ambient pressure across all compartments.
+  - `_ceiling_at_factor(self, gradient_factor: float) -> Pressure`  — Minimum tolerated ambient pressure across all compartments.
+  - `get_ceiling(self) -> Pressure`  — Ceiling at the instance's GF-low — the conservative bound.
+  - `get_ascent_ceiling(self, target: Pressure, first_stop: Pressure | None = None) -> Pressure`  — Ceiling with the gradient factor interpolated at `target`.
   - `set_state(self, state: BuhlmannState) -> None`  — Restore tissue tensions from a snapshot (exact, lossless).
   - `copy(self) -> Self`  — Independent clone with the same gradient and tissue tensions —
   attrs: `N2_HALF_TIMES: ClassVar[tuple[float, ...]]; N2_A: ClassVar[tuple[float, ...]]; N2_B: ClassVar[tuple[float, ...]]; HE_HALF_TIMES: ClassVar[tuple[float, ...]]; HE_A: ClassVar[tuple[float, ...]]; HE_B: ClassVar[tuple[float, ...]]; gradient: Gradient`
@@ -462,7 +466,6 @@ Ascent planning: deco schedules and gas selection.
 Ascent planner: compute the decompression schedule from a model state.
 `__all__ = ['plan_ascent', 'AscentNotConvergingError']`
 ### class `AscentNotConvergingError` (RuntimeError) — The stop loop failed to clear the next target within the iteration cap.
-- `_ceiling(model: BaseDecoModel[Any], target: Pressure, first_stop: Pressure | None) -> Pressure`  — Model ceiling for an ascent-to-`target` test.
 - `_next_targets(current: Pressure) -> list[Pressure]`  — Candidate ascent targets from shallowest to deepest: the surface, then
 - `plan_ascent(model: BaseDecoModel[Any], start_pressure: Pressure | str | float, gas: Gas | str, gas_plan: GasPlan | None = None, clock_offset: timedelta | float = timedelta(0)) -> list[DiveSegment]`  — Plan the decompression ascent from the given position and model state.
 
@@ -473,7 +476,6 @@ Gas plan: carried gases, selection, consumption, and reserve planning.
   `__slots__ = ('_gases',)`
   - `__init__(self, gases: Iterable[Gas | str])`
   - @property `gases(self) -> tuple[Gas, ...]`  — The carried gases (duplicates removed, insertion order).
-  - @staticmethod `is_breathable(gas: Gas, pressure: Pressure) -> bool`  — Whether `gas` is within the configured deco ppO2 window here.
   - `best_gas_at(self, pressure: Pressure) -> Gas | None`  — Richest breathable gas at `pressure`, or None if none qualifies.
   dunders: `__repr__`
 - `gas_consumption(segments: Iterable[DiveSegment]) -> dict[Gas, float]`  — Surface litres of each gas consumed over `segments`.
@@ -485,6 +487,7 @@ Gas plan: carried gases, selection, consumption, and reserve planning.
 
 ## `src/diveplan/registry.py`
 Entry-point plugin discovery for decompression models and formatters.
+`__all__ = ['registry', 'PluginRegistry', 'PluginNotFoundError', 'PluginInvalidError']`
 ### class `PluginNotFoundError` (KeyError) — No plugin is registered under the requested name.
   - `__init__(self, name: str, available: list[str], kind: str = 'decompression model') -> None`
 ### class `PluginInvalidError` (TypeError) — A discovered or registered plugin does not subclass its plugin base.
@@ -518,13 +521,13 @@ Argument-coercion helpers shared across the user-facing API.
 
 # Tests (tests/)
 - `conftest.py` (0 tests)
-- `test_buhlmann.py` (47 tests) — TestGradient, TestCompartmentState, TestCompartmentIntegration, TestCompartmentToleratedPressure, TestZHL16CTables, TestZHL16CModel, MiniBuhlmann, TestBuhlmannFamily, TestZHL16CRegistry
+- `test_buhlmann.py` (48 tests) — TestGradient, TestCompartmentState, TestCompartmentIntegration, TestCompartmentToleratedPressure, TestZHL16CTables, TestZHL16CModel, MiniBuhlmann, TestBuhlmannFamily, TestZHL16CRegistry
 - `test_config.py` (45 tests) — TestSubConfigBase, TestPhysicsConfig, TestGasConfig, TestDivePlanningConfig, TestDiveConfigStructure, TestGlobalDefault, TestContextManager, TestDefaultConfigLoading, TestSerialization
 - `test_dive.py` (28 tests) — TestIterSamples, TestDiveRun, TestDiveQueries, TestDiveContinuation, TestOxygenQueries
 - `test_dive_profile.py` (74 tests) — TestDiveProfileBuilder, TestDiveProfileValidation, TestDiveProfileFixes, TestDiveProfileTimeline, TestDiveProfileFluentBuilders, TestDiveProfileSerialization
 - `test_dive_segment.py` (59 tests) — TestDiveSegmentConstruction, TestDiveSegmentProperties, TestDiveSegmentInterpolation, TestDiveSegmentSplitting, TestDiveSegmentMerging, TestDiveSegmentContinuity, TestDiveSegmentIteration, TestDiveSegmentMagicMethods, TestDiveSegmentImmutability, TestDiveSegmentSerialization
-- `test_gas.py` (61 tests) — TestRawConstruction, TestNamedConstructors, TestFromName, TestPartialPressures, TestMod, TestEnd, TestBestMix, TestEqualityAndHash, TestStringRepresentation
-- `test_planning.py` (18 tests) — TestGasPlan, TestPlanAscentNoDeco, TestPlanAscentDeco
+- `test_gas.py` (64 tests) — TestRawConstruction, TestNamedConstructors, TestFromName, TestPartialPressures, TestMod, TestEnd, TestIsBreathable, TestBestMix, TestEqualityAndHash, TestStringRepresentation
+- `test_planning.py` (16 tests) — TestGasPlan, TestPlanAscentNoDeco, TestPlanAscentDeco
 - `test_pressure.py` (70 tests) — TestConstruction, TestProperties, TestAltConstructorsAndProperties, TestStringParsing, TestImmutability, TestAddition, TestSubtraction, TestMultiplication, TestDivision, TestOrdering, TestHashing, TestDisplay
 - `test_report.py` (39 tests) — TestGasConsumption, TestRockBottom, TestOxygenExposure, TestTtsVariations, TestDiveReport, TestRuntimeFormatter, TestRichConsoleFormatter, TestFormatterRegistry, TestBaseFormatterContract
-- `test_vpm.py` (23 tests) — TestBubbleMechanics, TestVpmBModel, TestVpmBRegistry
+- `test_vpm.py` (24 tests) — TestBubbleMechanics, TestVpmBModel, TestVpmBRegistry

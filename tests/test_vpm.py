@@ -149,10 +149,20 @@ class TestVpmBModel:
         assert ceilings[1] > ceilings[0]
 
     def test_pre_cva_vpm_more_conservative_than_raw_buhlmann(self):
-        vpm, zhl = VpmB(), ZHL16C()
+        vpm, zhl = VpmB(), ZHL16C()  # default ZHL16C is raw Bühlmann (GF 100/100)
         for model in (vpm, zhl):
             model.integrate_segment(constant_segment(40, 30))
-        assert vpm.get_ceiling() > zhl.get_ceiling(1.0)
+        assert vpm.get_ceiling() > zhl.get_ceiling()
+
+    def test_ascent_ceiling_is_plain_ceiling(self):
+        # VPM-B has no ascent-context behavior yet (pre-CVA): the base
+        # default — the plain ceiling — applies regardless of anchor.
+        model = VpmB()
+        model.integrate_segment(constant_segment(40, 30))
+        anchor = Pressure.from_depth_m(9)
+        assert (
+            model.get_ascent_ceiling(Pressure.surface(), anchor) == model.get_ceiling()
+        )
 
     def test_crushing_pressure_tracks_descent_maximum(self):
         model = VpmB()

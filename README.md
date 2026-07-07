@@ -13,7 +13,7 @@ simulations comparing algorithms, gases, and conditions.
 
 ## Status
 
-Early development — **all layers below are implemented and tested** (470 tests, strict mypy):
+Early development — **all layers below are implemented and tested** (483 tests, strict mypy):
 
 | Component | Status |
 |---|---|
@@ -25,7 +25,7 @@ Early development — **all layers below are implemented and tested** (470 tests
 | Plugin registry (entry-point deco-model discovery) | ✅ |
 | Deco models — Bühlmann ZHL-16C (GF), VPM-B (pre-CVA) | ✅ |
 | `Dive` — checkpoints, `state_at`/`ceiling_at`/`tts(t)`, `with_ascent` | ✅ |
-| Ascent planner (`plan_ascent`) + `GasPlan` | ✅ |
+| Ascent planner (`Dive.plan_ascent()`) + `GasPlan` | ✅ |
 | `DiveReport` + formatters (console, rich, runtime sheet, JSON, Subsurface XML) | ✅ |
 | Gas consumption, rock bottom, CNS/OTU, TTS variations | ✅ |
 | VPM-B critical-volume/Boyle stage | 🚧 in progress |
@@ -42,6 +42,47 @@ Early development — **all layers below are implemented and tested** (470 tests
   entry points.
 - **Experimentation-friendly** — config rejects only physically impossible
   values (zero/negative), never operational limits.
+
+## Public API
+
+Everything stable imports from the package root; submodule paths are
+implementation detail unless noted below.
+
+```python
+from diveplan import (
+    Pressure, Gas, DiveSegment, SegmentKind,     # core value types
+    DiveConfig, diveconfig,                      # configuration (+ live proxy)
+    DiveProfile, ProfileBuilderPolicy,           # profile building
+    ProfileValidationError,                      #   … and its error family base
+    Dive, TtsVariations,                         # running a model over a profile
+    GasPlan,                                     # carried gases & selection
+    AscentNotConvergingError,                    #   … planner failure mode
+    DiveReport, ReportRow,                       # pure-data report
+    BaseDecoModel, DecoState, BaseFormatter,     # plugin authoring contracts
+)
+```
+
+Deco ascents are planned from a `Dive` — `dive.plan_ascent(gas_plan)`
+returns the schedule as segments, `dive.with_ascent(gas_plan)` a completed
+dive. The underlying pure function lives in `diveplan.planning` for the
+advanced case of planning from a bare model state.
+
+Built-in deco models and report formatters are **plugins** — get them by
+name through the registry (the one documented submodule import):
+
+```python
+from diveplan.registry import registry
+
+ZHL16C = registry.model("zhl16c")               # or "vpmb"
+ConsoleFormatter = registry.formatter("console")  # or "rich", "runtime", "json", "subsurface"
+```
+
+Import concrete classes directly only for API beyond the plugin contract:
+family-specific machinery from `diveplan.models.buhlmann` / `diveplan.models.vpm`
+(e.g. `Gradient`, `BuhlmannModel` for subclassing), formatter extras from
+`diveplan.dive.formatters` (e.g. `ConsoleFormatter.format_schedule`, rich's
+`console=`), and the concrete validation-error subclasses from
+`diveplan.dive.dive_profile`.
 
 ## Installation
 
@@ -97,7 +138,7 @@ Building a profile — fluent style, with depths as `"40 m"` strings and gases
 by name:
 
 ```python
-from diveplan.dive.dive_profile import DiveProfile
+from diveplan import DiveProfile
 
 profile = (
     DiveProfile()

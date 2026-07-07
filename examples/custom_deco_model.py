@@ -14,8 +14,7 @@ DO NOT USE FOR REAL-WORLD DIVE PLANNING — experimental software.
 """
 
 from diveplan import Dive, DiveProfile
-from diveplan.models.buhlmann.model import BuhlmannModel
-from diveplan.models.buhlmann.zhl16 import ZHL16C
+from diveplan.models.buhlmann import BuhlmannModel, ZHL16C
 from diveplan.registry import registry
 
 # ---------------------------------------------------------------------------

@@ -22,8 +22,8 @@ from diveplan import (
     Gas,
     GasPlan,
     Pressure,
+    SegmentKind,
 )
-from diveplan.core.dive_segment import SegmentKind
 from diveplan.dive.formatters import ConsoleFormatter
 from diveplan.registry import registry
 

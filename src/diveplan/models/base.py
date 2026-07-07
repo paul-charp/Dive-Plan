@@ -107,7 +107,29 @@ class BaseDecoModel[StateT: DecoState](ABC):
 
     @abstractmethod
     def get_ceiling(self) -> Pressure:
-        """Return the current ceiling depth."""
+        """Return the current (conservative) ceiling.
+
+        Anything the ceiling depends on beyond tissue state — gradient
+        factors, conservatism level — is instance configuration, baked in
+        at construction. Overrides keep this exact signature.
+        """
+
+    def get_ascent_ceiling(
+        self, target: Pressure, first_stop: Pressure | None = None
+    ) -> Pressure:
+        """Ceiling for testing an ascent to `target` during staged deco.
+
+        The ascent planner calls this — never a model-specific API — so
+        models whose tolerance evolves over the ascent can express that
+        here: Bühlmann interpolates its gradient factor toward `target`,
+        and VPM-B's Boyle/CVA compensation will land here too.
+        `first_stop` is the first (deepest) stop of the ascent being
+        planned, or None while it is not yet known.
+
+        Default: the plain :meth:`get_ceiling`, which is correct for any
+        model whose tolerance does not depend on ascent context.
+        """
+        return self.get_ceiling()
 
     @abstractmethod
     def set_state(self, state: StateT) -> None:
