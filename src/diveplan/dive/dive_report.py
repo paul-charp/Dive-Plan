@@ -10,6 +10,7 @@ profiles directly, so a new output format is a single class.
 from datetime import timedelta
 from typing import NamedTuple
 
+from diveplan.core.config import DiveConfig
 from diveplan.core.gas import Gas
 from diveplan.core.pressure import Pressure
 from diveplan.dive.dive_profile import DiveProfile
@@ -54,6 +55,9 @@ class DiveReport:
         "cns",
         "otus",
         "rock_bottom_l",
+        "sac_bottom",
+        "sac_deco",
+        "sac_factor",
         "tts_variations",
     )
 
@@ -66,6 +70,9 @@ class DiveReport:
     cns: float
     otus: float
     rock_bottom_l: float
+    sac_bottom: float
+    sac_deco: float
+    sac_factor: float
     tts_variations: TtsVariations | None
 
     def __init__(
@@ -80,6 +87,9 @@ class DiveReport:
         cns: float,
         otus: float,
         rock_bottom_l: float,
+        sac_bottom: float,
+        sac_deco: float,
+        sac_factor: float,
         tts_variations: TtsVariations | None,
     ):
         self.profile = profile
@@ -91,6 +101,9 @@ class DiveReport:
         self.cns = cns
         self.otus = otus
         self.rock_bottom_l = rock_bottom_l
+        self.sac_bottom = sac_bottom
+        self.sac_deco = sac_deco
+        self.sac_factor = sac_factor
         self.tts_variations = tts_variations
 
     @classmethod
@@ -136,6 +149,10 @@ class DiveReport:
             default=Pressure.surface(),
         )
 
+        # Consumption and rock bottom read the active config; capture the
+        # SAC assumptions here so the report stays consistent with them.
+        gas_cfg = DiveConfig.current().gas
+
         return cls(
             profile=profile,
             model_name=dive.model_name,
@@ -146,6 +163,9 @@ class DiveReport:
             cns=cns_percent(segments),
             otus=otu(segments),
             rock_bottom_l=rock_bottom(max_pressure),
+            sac_bottom=gas_cfg.sac_bottom,
+            sac_deco=gas_cfg.sac_deco,
+            sac_factor=gas_cfg.sac_factor,
             tts_variations=tts_variations,
         )
 

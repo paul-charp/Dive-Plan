@@ -67,6 +67,7 @@ Runnable, commented examples live in [`examples/`](examples/):
 | [`batch_model_comparison.py`](examples/batch_model_comparison.py) | TTS grids across depths/times/models, incl. an altitude/fresh-water override |
 | [`custom_deco_model.py`](examples/custom_deco_model.py) | Writing and registering your own (Bühlmann-family) deco model |
 | [`tissue_loading_chart.py`](examples/tissue_loading_chart.py) | Dependency-free visualization of depth, ceiling, and tissue loading |
+| [`rich_console_report.py`](examples/rich_console_report.py) | Styled terminal report with the rich formatter — live print and text export |
 
 ```bash
 uv run python examples/complete_dive_plan.py
@@ -122,7 +123,10 @@ the bottom phase) and completed with its planned ascent:
 
 ```python
 from diveplan import Dive
-from diveplan.models.buhlmann.zhl16 import ZHL16C
+from diveplan.registry import registry
+
+# Deco models (and report formatters) are plugins — look them up by name:
+ZHL16C = registry.model("zhl16c")
 
 bottom = DiveProfile().descend_to("40 m").stay(25)
 dive = Dive.run(bottom, ZHL16C(gradient="30/70"))
@@ -168,7 +172,7 @@ src/diveplan/
 ├── models/      # deco models: Bühlmann family (ZHL-16C), VPM-B
 ├── planning/    # ascent planner, gas plan, consumption, rock bottom
 ├── utils/       # argument coercion ("40 m", "ean50")
-└── registry.py  # entry-point plugin discovery (diveplan.deco_models)
+└── registry.py  # entry-point plugin discovery (deco models + formatters)
 ```
 
 ## Development

@@ -15,7 +15,10 @@ DO NOT USE FOR REAL-WORLD DIVE PLANNING — experimental software.
 from datetime import timedelta
 
 from diveplan import Dive, DiveProfile, GasPlan
-from diveplan.models.buhlmann.zhl16 import ZHL16C
+from diveplan.registry import registry
+
+# Models are plugins — look them up by registry name:
+ZHL16C = registry.model("zhl16c")
 
 WIDTH = 46  # characters for the 0..max-depth axis
 SAMPLE_MINUTES = 2
@@ -33,7 +36,7 @@ def column(depth_m: float) -> int:
     return round(WIDTH * max(0.0, depth_m) / max_depth)
 
 
-print(f"depth/ceiling over time — {dive.model_name}, GF 30/70, EAN50 carried")
+print(f"depth/ceiling over time — {dive.model_name}, EAN50 carried")
 print("'#' diver depth, '~' deco ceiling, leading-tissue N2 tension at right")
 print()
 print("  time    0 m" + " " * (WIDTH - 8) + f"{max_depth:.0f} m")

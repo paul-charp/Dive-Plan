@@ -319,8 +319,9 @@ class Dive[StateT: DecoState]:
 
     @property
     def model_name(self) -> str:
-        """Registry name of the model this result was computed with."""
-        return getattr(type(self._model), "NAME", type(self._model).__name__)
+        """Name of the model this result was computed with, conservatism
+        included — e.g. ``"zhl16c GF 30/70"`` or ``"vpmb +3"``."""
+        return self._model.name
 
     def __repr__(self) -> str:
         return (

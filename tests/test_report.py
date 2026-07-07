@@ -31,6 +31,7 @@ from diveplan.dive.formatters import (
 )
 from diveplan.models.buhlmann.common import Gradient
 from diveplan.models.buhlmann.zhl16 import ZHL16C
+from diveplan.models.vpm.model import VpmB
 from diveplan.planning.ascent_plan import plan_ascent
 from diveplan.planning.gas_plan import (
     GasPlan,
@@ -211,7 +212,7 @@ def full_dive_report() -> DiveReport:
 class TestDiveReport:
     def test_fields(self):
         report = full_dive_report()
-        assert report.model_name == "zhl16c"
+        assert report.model_name == "zhl16c GF 30/70"
         assert report.max_depth == Pressure.from_depth_m(40)
         assert report.runtime == report.rows[-1].runtime
         assert len(report.rows) == report.profile.segment_count
@@ -222,20 +223,41 @@ class TestDiveReport:
         assert report.rock_bottom_l == pytest.approx(rock_bottom(40), rel=1e-6)
         assert isinstance(report.tts_variations, TtsVariations)
 
+    def test_sac_captured_from_config(self):
+        cfg = DiveConfig.current().gas
+        cfg.sac_bottom = 18.0
+        cfg.sac_deco = 12.0
+        cfg.sac_factor = 3.0
+        report = full_dive_report()
+        assert report.sac_bottom == 18.0
+        assert report.sac_deco == 12.0
+        assert report.sac_factor == 3.0
+
+    def test_model_name_bakes_in_conservatism(self):
+        profile = DiveProfile().descend_to("15 m").stay(10).surface()
+        report = DiveReport.from_dive(Dive.run(profile, VpmB(conservatism=3)))
+        assert report.model_name == "vpmb +3"
+
     def test_console_formatter(self):
         text = ConsoleFormatter().format(full_dive_report())
-        assert "zhl16c" in text
+        assert "zhl16c GF 30/70" in text
         assert "switch to EAN50" in text
         assert "CNS" in text and "OTU" in text
-        assert "rock bottom" in text
+        assert "SAC: bottom 20 L/min, deco 15 L/min" in text
+        assert "rock bottom @ 40 m (SAC x2)" in text
         assert "TTS variation" in text
 
     def test_json_formatter_round_trips(self):
         document = jsonlib.loads(JsonFormatter().format(full_dive_report()))
-        assert document["model"] == "zhl16c"
+        assert document["model"] == "zhl16c GF 30/70"
         assert document["max_depth_m"] == pytest.approx(40.0, abs=0.1)
         assert document["segments"][0]["kind"] == "DESCENT"
         assert document["consumption_l"]["EAN50"] > 0
+        assert document["sac"] == {
+            "bottom_l_min": 20.0,
+            "deco_l_min": 15.0,
+            "rock_bottom_factor": 2.0,
+        }
         assert document["cns_percent"] > 0
         assert document["tts_variations"]["per_minute_s"] > 0
 
@@ -283,9 +305,21 @@ class TestRuntimeFormatter:
         assert sum(ln.endswith("Air") for ln in rows) == 1
         assert sum(ln.endswith("EAN50") for ln in rows) == 1
 
+    def test_header_shows_gf(self):
+        text = RuntimeFormatter().format(full_dive_report())
+        assert text.splitlines()[0].startswith("DIVE PLAN - zhl16c GF 30/70")
+
+    def test_header_shows_vpm_conservatism(self):
+        profile = DiveProfile().descend_to("15 m").stay(10).surface()
+        report = DiveReport.from_dive(Dive.run(profile, VpmB()))
+        text = RuntimeFormatter().format(report)
+        assert text.splitlines()[0].startswith("DIVE PLAN - vpmb +0 |")
+        assert "GF" not in text
+
     def test_footer_content(self):
         text = RuntimeFormatter().format(full_dive_report())
         assert "rock bottom" in text
+        assert "sac          bottom 20 / deco 15 L/min | rock bottom x2" in text
         assert "CNS" in text and "OTU" in text
         assert "DO NOT USE FOR REAL DIVES" in text
 
@@ -305,6 +339,8 @@ class TestRichConsoleFormatter:
     def test_plain_string_contains_report(self):
         text = RichConsoleFormatter(styled=False).format(full_dive_report())
         assert "zhl16c" in text
+        assert "GF 30/70" in text
+        assert "SAC bottom / deco" in text
         assert "switch to EAN50" in text
         assert "rock bottom" in text
         assert "[" not in text  # no ANSI when unstyled
@@ -312,3 +348,54 @@ class TestRichConsoleFormatter:
     def test_styled_string_has_ansi(self):
         text = RichConsoleFormatter(styled=True).format(full_dive_report())
         assert "[" in text
+
+
+# ------------------------------------------------------------------
+# Formatter plugin discovery
+# ------------------------------------------------------------------
+
+
+class TestFormatterRegistry:
+    def test_discoverable_via_entry_points(self):
+        from diveplan.registry import PluginRegistry
+
+        fresh = PluginRegistry()  # bypass the module singleton's cache
+        assert fresh.formatter("rich") is RichConsoleFormatter
+        assert set(fresh.all_formatters()) >= {
+            "console",
+            "json",
+            "rich",
+            "runtime",
+            "subsurface",
+        }
+
+    def test_unknown_name_raises_with_kind(self):
+        from diveplan.registry import PluginNotFoundError, PluginRegistry
+
+        with pytest.raises(PluginNotFoundError, match="formatter"):
+            PluginRegistry().formatter("hologram")
+
+    def test_register_formatter_validates_base(self):
+        from diveplan.registry import PluginInvalidError, PluginRegistry
+
+        with pytest.raises(PluginInvalidError):
+            PluginRegistry().register_formatter("bad", int)  # type: ignore[arg-type]
+
+    def test_manual_registration_shadows_discovery(self):
+        from diveplan.registry import PluginRegistry
+
+        fresh = PluginRegistry()
+        fresh.register_formatter("console", RuntimeFormatter)
+        assert fresh.formatter("console") is RuntimeFormatter
+
+
+class TestBaseFormatterContract:
+    def test_print_writes_stdout(self, capsys):
+        ConsoleFormatter().print(full_dive_report())
+        assert "zhl16c GF 30/70" in capsys.readouterr().out
+
+    def test_optionless_formatter_rejects_options(self):
+        # ConsoleFormatter defines no __init__ — the permissive base
+        # signature must still reject unknown options at runtime.
+        with pytest.raises(TypeError, match="accepts no options"):
+            ConsoleFormatter(styled=True)

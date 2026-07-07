@@ -24,14 +24,22 @@ from diveplan import (
     Pressure,
 )
 from diveplan.core.dive_segment import SegmentKind
-from diveplan.dive.formatters import (
-    ConsoleFormatter,
-    JsonFormatter,
-    RuntimeFormatter,
-    SubsurfaceXmlFormatter,
-)
-from diveplan.models.buhlmann.zhl16 import ZHL16C
-from diveplan.models.vpm.model import VpmB
+from diveplan.dive.formatters import ConsoleFormatter
+from diveplan.registry import registry
+
+# Deco models and formatters are plugins, discovered from the entry-point
+# groups "diveplan.deco_models" and "diveplan.formatters" — third-party
+# packages can add their own. Look them up by registry name; lookups are
+# typed to the plugin base contract (construct with the plugin's own
+# options, then format/print/write). ConsoleFormatter is imported directly
+# above because this example also uses its class-specific
+# `format_schedule` — for API beyond the base contract, a direct import
+# keeps full static typing.
+ZHL16C = registry.model("zhl16c")
+VpmB = registry.model("vpmb")
+JsonFormatter = registry.formatter("json")
+RuntimeFormatter = registry.formatter("runtime")
+SubsurfaceXmlFormatter = registry.formatter("subsurface")
 
 
 def minutes(td: timedelta) -> str:
@@ -173,6 +181,10 @@ print()
 # ---------------------------------------------------------------------------
 print("=== 8. Dive report ===")
 
+print(f"model plugins     : {sorted(registry.all_models())}")
+print(f"formatter plugins : {sorted(registry.all_formatters())}")
+print()
+
 report = DiveReport.from_dive(
     full_dive,
     # The "+1 m / +1 min" figures describe the *bottom* plan, so they are
@@ -188,9 +200,8 @@ print()
 print(RuntimeFormatter().format(report))
 print()
 
-# For a colored interactive rendering, try:
-#   from diveplan.dive.formatters import RichConsoleFormatter
-#   RichConsoleFormatter().print(report)
+# For a colored interactive rendering, see examples/rich_console_report.py:
+#   registry.formatter("rich")().print(report)
 
 json_doc = JsonFormatter().format(report)
 print(f"JSON report: {len(json_doc)} bytes")

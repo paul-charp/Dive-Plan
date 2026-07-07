@@ -62,6 +62,11 @@ class RuntimeFormatter(BaseFormatter):
         )
         lines.append(f"gas used     {consumed}")
         lines.append(
+            f"sac          bottom {report.sac_bottom:g} / "
+            f"deco {report.sac_deco:g} L/min | "
+            f"rock bottom x{report.sac_factor:g}"
+        )
+        lines.append(
             f"rock bottom  {report.rock_bottom_l:.0f} L "
             f"@ {report.max_depth.depth_m:.0f} m"
         )

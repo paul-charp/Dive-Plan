@@ -143,6 +143,12 @@ class BuhlmannModel(BaseDecoModel[BuhlmannState]):
         ]
 
     @property
+    def name(self) -> str:
+        """Registry name plus gradient factors — e.g. ``"zhl16c GF 30/70"``."""
+        gf = self.gradient
+        return f"{super().name} GF {round(gf.gf_low * 100)}/{round(gf.gf_high * 100)}"
+
+    @property
     def compartment_count(self) -> int:
         """Number of tissue compartments in this model's table."""
         return len(self.N2_HALF_TIMES)

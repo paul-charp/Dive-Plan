@@ -51,6 +51,11 @@ class JsonFormatter(BaseFormatter):
             "consumption_l": {
                 gas.name: round(litres, 1) for gas, litres in report.consumption_l
             },
+            "sac": {
+                "bottom_l_min": report.sac_bottom,
+                "deco_l_min": report.sac_deco,
+                "rock_bottom_factor": report.sac_factor,
+            },
             "rock_bottom_l": round(report.rock_bottom_l, 1),
             "cns_percent": round(report.cns, 1),
             "otu": round(report.otus, 1),

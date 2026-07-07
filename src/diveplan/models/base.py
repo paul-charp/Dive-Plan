@@ -10,7 +10,7 @@ what counterfactual queries (TTS at time t) resume from.
 
 from abc import ABC, abstractmethod
 from datetime import timedelta
-from typing import ClassVar, Self
+from typing import Any, ClassVar, Self
 
 from diveplan.core.dive_segment import DiveSegment
 from diveplan.core.gas import Gas
@@ -42,9 +42,28 @@ class BaseDecoModel[StateT: DecoState](ABC):
     NAME: ClassVar[str]
 
     @abstractmethod
-    def __init__(self) -> None:
-        """Initialize the decompression model."""
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the decompression model.
+
+        Concrete models define their own configuration parameters
+        (gradient factors, conservatism, …); this permissive abstract
+        signature is what lets registry-typed construction
+        (``registry.model(name)(**config)``) type-check. Arguments are
+        still validated at runtime by the concrete ``__init__`` — do not
+        forward them here.
+        """
         self.sample_rate_seconds = 1
+
+    @property
+    def name(self) -> str:
+        """Display name of this model instance, conservatism included.
+
+        Defaults to the registry ``NAME``. Models with a conservatism
+        setting (gradient factors, VPM conservatism level) append it, so
+        the name alone says how a schedule was computed — e.g.
+        ``"zhl16c GF 30/70"`` or ``"vpmb +3"``.
+        """
+        return getattr(type(self), "NAME", type(self).__name__)
 
     def integrate_segment(self, segment: DiveSegment) -> StateT:
         """Integrate a dive segment into the model and return the state after it.

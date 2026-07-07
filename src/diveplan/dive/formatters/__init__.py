@@ -7,7 +7,7 @@ under the ``diveplan.formatters`` entry-point group.
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from diveplan.dive.dive_report import DiveReport
 
@@ -19,6 +19,19 @@ class BaseFormatter(ABC):
 
     NAME: ClassVar[str]
 
+    def __init__(self, **options: Any) -> None:
+        """Formatters take keyword options only, defined per formatter.
+
+        This permissive base signature is what lets registry-typed
+        construction (``registry.formatter(name)(**options)``) type-check;
+        options are still validated at runtime — here for formatters that
+        define none, by the concrete ``__init__`` otherwise.
+        """
+        if options:
+            raise TypeError(
+                f"{type(self).__name__} accepts no options, got {sorted(options)}."
+            )
+
     @abstractmethod
     def format(self, report: DiveReport) -> str:
         """Render the report as a string in this formatter's output format."""
@@ -26,6 +39,13 @@ class BaseFormatter(ABC):
     def write(self, report: DiveReport, path: str | Path) -> None:
         """Render the report and write it to `path` (UTF-8, LF endings)."""
         Path(path).write_text(self.format(report), encoding="utf-8", newline="\n")
+
+    def print(self, report: DiveReport) -> None:
+        """Render the report and print it to stdout.
+
+        Formatters with terminal-aware rendering (rich) override this.
+        """
+        print(self.format(report))
 
 
 from diveplan.dive.formatters.console import ConsoleFormatter  # noqa: E402

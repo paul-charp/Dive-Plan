@@ -103,10 +103,15 @@ class RichConsoleFormatter(BaseFormatter):
             "runtime / max depth",
             f"{_minutes(report.runtime)} min / {report.max_depth.depth_m:.1f} m",
         )
+        summary.add_row(
+            "SAC bottom / deco",
+            f"{report.sac_bottom:g} / {report.sac_deco:g} L/min",
+        )
         for gas, litres in report.consumption_l:
             summary.add_row(f"{gas.name} consumed", f"{litres:.0f} L")
         summary.add_row(
-            f"rock bottom @ {report.max_depth.depth_m:.0f} m",
+            f"rock bottom @ {report.max_depth.depth_m:.0f} m "
+            f"(SAC ×{report.sac_factor:g})",
             f"{report.rock_bottom_l:.0f} L",
         )
         summary.add_row("exposure", f"CNS {report.cns:.0f} %  ·  OTU {report.otus:.0f}")

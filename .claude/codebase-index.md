@@ -167,7 +167,7 @@ Dive: a deco model run over a profile, queryable and extendable.
   - `with_ascent(self, gas_plan: GasPlan | None = None) -> 'Dive[StateT]'`  — New Dive completed with its planned deco ascent —
   - `tts_variations(self, gas_plan: GasPlan | None = None) -> TtsVariations`  — Extra time-to-surface per +1 m on the final segment and per +1 min
   - `_unique_gases(self) -> list[Gas]`
-  - @property `model_name(self) -> str`  — Registry name of the model this result was computed with.
+  - @property `model_name(self) -> str`  — Name of the model this result was computed with, conservatism
   dunders: `__repr__`
 - `_ascent_duration(model: BaseDecoModel[Any], start_pressure: Pressure, gas: Gas, gas_plan: GasPlan, clock_offset: timedelta) -> timedelta`
 
@@ -268,18 +268,20 @@ Dive report: everything about a computed dive, ready for presentation.
 ### class `ReportRow` (NamedTuple) — One schedule line: a segment with its cumulative runtime at the end.
   attrs: `runtime: timedelta; start_depth_m: float; end_depth_m: float; duration: timedelta; gas: Gas; kind: str`
 ### class `DiveReport` — Immutable summary of a computed dive.
-  `__slots__ = ('profile', 'model_name', 'rows', 'runtime', 'max_depth', 'consumption_l', 'cns', 'otus', 'rock_bottom_l', 'tts_variations')`
-  - `__init__(self, *, profile: DiveProfile, model_name: str, rows: tuple[ReportRow, ...], runtime: timedelta, max_depth: Pressure, consumption_l: tuple[tuple[Gas, float], ...], cns: float, otus: float, rock_bottom_l: float, tts_variations: TtsVariations | None)`
+  `__slots__ = ('profile', 'model_name', 'rows', 'runtime', 'max_depth', 'consumption_l', 'cns', 'otus', 'rock_bottom_l', 'sac_bottom', 'sac_deco', 'sac_factor', 'tts_variations')`
+  - `__init__(self, *, profile: DiveProfile, model_name: str, rows: tuple[ReportRow, ...], runtime: timedelta, max_depth: Pressure, consumption_l: tuple[tuple[Gas, float], ...], cns: float, otus: float, rock_bottom_l: float, sac_bottom: float, sac_deco: float, sac_factor: float, tts_variations: TtsVariations | None)`
   - @classmethod `from_dive(cls, dive: Dive[DecoState], *, gas_plan: GasPlan | None = None, tts_variations: TtsVariations | None = None) -> 'DiveReport'`  — Assemble a report from a computed dive.
-  attrs: `profile: DiveProfile; model_name: str; rows: tuple[ReportRow, ...]; runtime: timedelta; max_depth: Pressure; consumption_l: tuple[tuple[Gas, float], ...]; cns: float; otus: float; rock_bottom_l: float; tts_variations: TtsVariations | None`
+  attrs: `profile: DiveProfile; model_name: str; rows: tuple[ReportRow, ...]; runtime: timedelta; max_depth: Pressure; consumption_l: tuple[tuple[Gas, float], ...]; cns: float; otus: float; rock_bottom_l: float; sac_bottom: float; sac_deco: float; sac_factor: float; tts_variations: TtsVariations | None`
   dunders: `__repr__`
 
 ## `src/diveplan/dive/formatters/__init__.py`
 Report formatters: turn a DiveReport into an output document.
 `__all__ = ['BaseFormatter']`
 ### class `BaseFormatter` (ABC) — Base class for all report formatters.
+  - `__init__(self, **options) -> None`  — Formatters take keyword options only, defined per formatter.
   - @abstract `format(self, report: DiveReport) -> str`  — Render the report as a string in this formatter's output format.
   - `write(self, report: DiveReport, path: str | Path) -> None`  — Render the report and write it to `path` (UTF-8, LF endings).
+  - `print(self, report: DiveReport) -> None`  — Render the report and print it to stdout.
   attrs: `NAME: ClassVar[str]`
 
 ## `src/diveplan/dive/formatters/console.py`
@@ -342,7 +344,8 @@ Decompression model base classes.
   `__slots__ = ()`
 ### class `BaseDecoModel[StateT: DecoState]` (ABC) — Base class for all decompression models.
   `__slots__ = ('sample_rate_seconds',)`
-  - @abstract `__init__(self) -> None`  — Initialize the decompression model.
+  - @abstract `__init__(self, *args, **kwargs) -> None`  — Initialize the decompression model.
+  - @property `name(self) -> str`  — Display name of this model instance, conservatism included.
   - `integrate_segment(self, segment: DiveSegment) -> StateT`  — Integrate a dive segment into the model and return the state after it.
   - `get_state(self) -> StateT`  — Snapshot the current model state (public accessor).
   - `integrate(self, pressure: Pressure, gas: Gas, dt: timedelta) -> None`  — Advance the model by a single step at the given pressure and gas.
@@ -392,6 +395,7 @@ Generic Bühlmann decompression engine.
 ### class `BuhlmannModel` (BaseDecoModel[BuhlmannState]) — Bühlmann algorithm over a subclass-supplied coefficient table.
   `__slots__ = ('gradient', '_compartments')`
   - `__init__(self, gradient: Gradient | str | None = None)`
+  - @property `name(self) -> str`  — Registry name plus gradient factors — e.g. ``"zhl16c GF 30/70"``.
   - @property `compartment_count(self) -> int`  — Number of tissue compartments in this model's table.
   - `_integrate_model(self, pressure: Pressure, gas: Gas, dt: timedelta) -> None`
   - `_get_deco_state(self) -> BuhlmannState`
@@ -436,6 +440,7 @@ VPM-B decompression model (Varying Permeability Model, revision B).
 ### class `VpmB` (BaseDecoModel[VpmState]) — VPM-B core model (pre-CVA ceilings; see module docstring for scope).
   `__slots__ = ('conservatism', '_compartments', '_max_crush_n2_bar', '_max_crush_he_bar', '_onset_tension_bar', '_runtime_min')`
   - `__init__(self, conservatism: int = 0)`
+  - @property `name(self) -> str`  — Registry name plus conservatism level — e.g. ``"vpmb +3"``.
   - @property `crit_radius_n2_um(self) -> float`  — Initial N2 critical radius after conservatism scaling.
   - @property `crit_radius_he_um(self) -> float`  — Initial He critical radius after conservatism scaling.
   - @staticmethod `_total_tension_bar(compartment: Compartment) -> float`
@@ -479,18 +484,24 @@ Gas plan: carried gases, selection, consumption, and reserve planning.
 - `otu(segments: Iterable[DiveSegment], *, step: timedelta = timedelta(seconds=10)) -> float`  — Pulmonary oxygen-toxicity units (REPEX) accumulated over `segments`.
 
 ## `src/diveplan/registry.py`
-Entry-point plugin discovery for decompression models.
+Entry-point plugin discovery for decompression models and formatters.
 ### class `PluginNotFoundError` (KeyError) — No plugin is registered under the requested name.
-  - `__init__(self, name: str, available: list[str]) -> None`
-### class `PluginInvalidError` (TypeError) — A discovered or registered plugin does not subclass BaseDecoModel.
-### class `PluginRegistry` — Deco-model lookup: entry-point discovery plus manual registration.
+  - `__init__(self, name: str, available: list[str], kind: str = 'decompression model') -> None`
+### class `PluginInvalidError` (TypeError) — A discovered or registered plugin does not subclass its plugin base.
+- `_discover(group: str, base: type[T]) -> dict[str, type[T]]`  — Load every entry point in `group`, validating against `base`.
+### class `PluginRegistry` — Deco-model and formatter lookup: entry-point discovery plus manual
   - `__init__(self) -> None`
   - @cached_property `_discovered(self) -> dict[str, type[BaseDecoModel[Any]]]`  — Discovered once from entry points, then frozen.
+  - @cached_property `_discovered_formatters(self) -> dict[str, type[BaseFormatter]]`  — Discovered once from entry points, then frozen.
   - @property `_all(self) -> dict[str, type[BaseDecoModel[Any]]]`  — Overrides shadow discovered plugins of the same name.
+  - @property `_all_formatters(self) -> dict[str, type[BaseFormatter]]`  — Overrides shadow discovered plugins of the same name.
   - `model(self, name: str) -> type[BaseDecoModel[Any]]`  — Return the plugin class for *name*, or raise PluginNotFoundError.
   - `all_models(self) -> dict[str, type[BaseDecoModel[Any]]]`  — All registered plugins, keyed by name.
   - `register_model(self, name: str, cls: type[BaseDecoModel[Any]]) -> None`  — Manually register a plugin class — escape hatch for tests,
-  - `invalidate(self) -> None`  — Force re-discovery on next access.
+  - `formatter(self, name: str) -> type[BaseFormatter]`  — Return the formatter class for *name*, or raise PluginNotFoundError.
+  - `all_formatters(self) -> dict[str, type[BaseFormatter]]`  — All registered formatters, keyed by name.
+  - `register_formatter(self, name: str, cls: type[BaseFormatter]) -> None`  — Manually register a formatter class — escape hatch for tests,
+  - `invalidate(self) -> None`  — Force re-discovery of both groups on next access.
 - const `registry = PluginRegistry()`
 
 ## `src/diveplan/utils/__init__.py`
@@ -515,5 +526,5 @@ Argument-coercion helpers shared across the user-facing API.
 - `test_gas.py` (61 tests) — TestRawConstruction, TestNamedConstructors, TestFromName, TestPartialPressures, TestMod, TestEnd, TestBestMix, TestEqualityAndHash, TestStringRepresentation
 - `test_planning.py` (18 tests) — TestGasPlan, TestPlanAscentNoDeco, TestPlanAscentDeco
 - `test_pressure.py` (70 tests) — TestConstruction, TestProperties, TestAltConstructorsAndProperties, TestStringParsing, TestImmutability, TestAddition, TestSubtraction, TestMultiplication, TestDivision, TestOrdering, TestHashing, TestDisplay
-- `test_report.py` (29 tests) — TestGasConsumption, TestRockBottom, TestOxygenExposure, TestTtsVariations, TestDiveReport, TestRuntimeFormatter, TestRichConsoleFormatter
+- `test_report.py` (39 tests) — TestGasConsumption, TestRockBottom, TestOxygenExposure, TestTtsVariations, TestDiveReport, TestRuntimeFormatter, TestRichConsoleFormatter, TestFormatterRegistry, TestBaseFormatterContract
 - `test_vpm.py` (23 tests) — TestBubbleMechanics, TestVpmBModel, TestVpmBRegistry

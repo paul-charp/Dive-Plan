@@ -1,8 +1,8 @@
 Plugins and utilities
 =====================
 
-Model registry
---------------
+Plugin registry
+---------------
 
 .. automodule:: diveplan.registry
    :members:

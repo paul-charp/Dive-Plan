@@ -237,6 +237,11 @@ class VpmB(BaseDecoModel[VpmState]):
         ]
         self._runtime_min = 0.0
 
+    @property
+    def name(self) -> str:
+        """Registry name plus conservatism level — e.g. ``"vpmb +3"``."""
+        return f"{super().name} +{self.conservatism}"
+
     # ------------------------------------------------------------------
     # Bubble bookkeeping
     # ------------------------------------------------------------------

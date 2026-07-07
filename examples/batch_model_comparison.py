@@ -12,9 +12,16 @@ Run from the repo root:
 DO NOT USE FOR REAL-WORLD DIVE PLANNING — experimental software.
 """
 
+from collections.abc import Callable
+from typing import Any
+
 from diveplan import Dive, DiveConfig, DiveProfile, GasPlan
-from diveplan.models.buhlmann.zhl16 import ZHL16C
-from diveplan.models.vpm.model import VpmB
+from diveplan.models.base import BaseDecoModel
+from diveplan.registry import registry
+
+# Models are plugins — look them up by registry name:
+ZHL16C = registry.model("zhl16c")
+VpmB = registry.model("vpmb")
 
 CARRIED = GasPlan(["air", "ean50"])
 
@@ -30,7 +37,11 @@ DEPTHS_M = (30, 40, 50)
 BOTTOM_MINUTES = (15, 20, 25)
 
 
-def tts_minutes(depth_m: float, bottom_min: float, make_model) -> float:
+def tts_minutes(
+    depth_m: float,
+    bottom_min: float,
+    make_model: Callable[[], BaseDecoModel[Any]],
+) -> float:
     """Time-to-surface (minutes) at the end of the given bottom plan."""
     profile = DiveProfile().descend_to(depth_m).stay(bottom_min)
     dive = Dive.run(profile, make_model())

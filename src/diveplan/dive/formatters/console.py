@@ -61,6 +61,7 @@ class ConsoleFormatter(BaseFormatter):
             f"Dive plan — {report.model_name}",
             f"runtime {_minutes(report.runtime).strip()}, "
             f"max depth {report.max_depth.depth_m:.1f} m",
+            f"SAC: bottom {report.sac_bottom:g} L/min, deco {report.sac_deco:g} L/min",
         ]
         if report.tts_variations is not None:
             per_m = report.tts_variations.per_meter.total_seconds()
@@ -76,8 +77,8 @@ class ConsoleFormatter(BaseFormatter):
         for gas, litres in report.consumption_l:
             lines.append(f"  {gas.name:<6} consumed : {litres:7.0f} L")
         lines.append(
-            f"  rock bottom @ {report.max_depth.depth_m:.0f} m : "
-            f"{report.rock_bottom_l:7.0f} L"
+            f"  rock bottom @ {report.max_depth.depth_m:.0f} m "
+            f"(SAC x{report.sac_factor:g}) : {report.rock_bottom_l:7.0f} L"
         )
         lines.append(f"  CNS {report.cns:.0f} %   OTU {report.otus:.0f}")
         return "\n".join(lines)
