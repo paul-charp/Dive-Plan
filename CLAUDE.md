@@ -40,8 +40,9 @@ dive/dive_profile.py  DiveProfile (builder/validation/timeline/iter_samples) —
 models/        deco models (BaseDecoModel[StateT], Bühlmann family, VPM-B)
 planning/      plan_ascent, GasPlan, consumption/rock-bottom/CNS/OTU — consumes models
 dive/dive.py   Dive — top of the stack (profile + models + planning)
-dive/dive_report.py   DiveReport (pure data) + dive/formatters/ (console, json, subsurface XML)
-registry.py    entry-point plugin discovery for deco models
+dive/dive_report.py   DiveReport (pure data)
+dive/formatters/   Report formatters (console, json, rich, runtime, subsurface XML)
+registry.py    entry-point plugin discovery (deco models + formatters)
 ```
 
 ### Pressure is ground truth

@@ -21,8 +21,11 @@ schedule, and report:
 .. code-block:: python
 
     from diveplan import Dive, DiveProfile, DiveReport, GasPlan
-    from diveplan.dive.formatters import ConsoleFormatter
-    from diveplan.models.buhlmann.zhl16 import ZHL16C
+    from diveplan.registry import registry
+
+    # Models and formatters are plugins — look them up by name:
+    ZHL16C = registry.model("zhl16c")
+    ConsoleFormatter = registry.formatter("console")
 
     bottom = DiveProfile().descend_to("40 m").stay(25)   # air by default
     carried = GasPlan(["air", "ean50"])

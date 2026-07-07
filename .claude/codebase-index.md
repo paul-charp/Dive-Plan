@@ -1,6 +1,6 @@
 # diveplan codebase index
 
-Auto-generated API map (regenerate: `uv run python .claude/generate-index.py`). Generated 2026-07-06.
+Auto-generated API map (regenerate: `uv run python .claude/generate-index.py`). Generated 2026-07-07.
 
 Read this instead of source files when you only need signatures/structure. Read the actual source before *editing* anything listed here.
 
