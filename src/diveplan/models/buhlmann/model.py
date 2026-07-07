@@ -164,16 +164,35 @@ class BuhlmannModel(BaseDecoModel[BuhlmannState]):
     def _get_deco_state(self) -> BuhlmannState:
         return BuhlmannState(tuple(c.tensions_mbar for c in self._compartments))
 
-    def get_ceiling(self, gradient_factor: float | None = None) -> Pressure:
-        """Minimum tolerated ambient pressure across all compartments.
+    def _ceiling_at_factor(self, gradient_factor: float) -> Pressure:
+        """Minimum tolerated ambient pressure across all compartments."""
+        return max(
+            c.tolerated_ambient_pressure(gradient_factor) for c in self._compartments
+        )
+
+    def get_ceiling(self) -> Pressure:
+        """Ceiling at the instance's GF-low — the conservative bound.
 
         A ceiling above surface pressure means decompression stops are
-        required. Defaults to GF-low (the conservative bound during the deep
-        phase); the ascent planner passes interpolated factors from
-        ``Gradient.factor()`` as the diver approaches the surface.
+        required. The gradient pair is instance configuration; ceilings
+        under a different GF come from an instance built with it, not a
+        parameter. Ascent-context interpolation is
+        :meth:`get_ascent_ceiling`.
         """
-        gf = gradient_factor if gradient_factor is not None else self.gradient.gf_low
-        return max(c.tolerated_ambient_pressure(gf) for c in self._compartments)
+        return self._ceiling_at_factor(self.gradient.gf_low)
+
+    def get_ascent_ceiling(
+        self, target: Pressure, first_stop: Pressure | None = None
+    ) -> Pressure:
+        """Ceiling with the gradient factor interpolated at `target`.
+
+        GF-low anchors at `first_stop` (the deepest stop of the ascent
+        being planned), GF-high at the surface. Until the first stop is
+        known the conservative GF-low applies.
+        """
+        if first_stop is None:
+            return self.get_ceiling()
+        return self._ceiling_at_factor(self.gradient.factor(target, first_stop))
 
     # ------------------------------------------------------------------
     # State snapshot / restore (checkpointing, counterfactual queries)

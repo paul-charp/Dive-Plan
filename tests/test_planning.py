@@ -59,19 +59,6 @@ class TestGasPlan:
         assert GasPlan(["air", "ean50"]).gases == (AIR, EAN50)
         assert GasPlan(["tx21/35", AIR]).gases == (Gas.trimix(0.21, 0.35), AIR)
 
-    def test_breathability_window(self):
-        # EAN50 at 21 m: ppO2 ≈ 1.56 bar — inside the 1.6 deco limit.
-        assert GasPlan.is_breathable(EAN50, Pressure.from_depth_m(21))
-        # EAN50 at 30 m: ppO2 ≈ 2.0 bar — out.
-        assert not GasPlan.is_breathable(EAN50, Pressure.from_depth_m(30))
-        # Air at the surface is fine; oxygen at 30 m is not.
-        assert GasPlan.is_breathable(AIR, Pressure.surface())
-        assert not GasPlan.is_breathable(OXYGEN, Pressure.from_depth_m(30))
-
-    def test_hypoxic_floor(self):
-        trimix_10_70 = Gas.trimix(0.10, 0.70)
-        assert not GasPlan.is_breathable(trimix_10_70, Pressure.surface())
-
     def test_best_gas_picks_richest_usable(self):
         plan = GasPlan([AIR, EAN50, OXYGEN])
         assert plan.best_gas_at(Pressure.from_depth_m(21)) == EAN50
@@ -82,9 +69,10 @@ class TestGasPlan:
         plan = GasPlan([OXYGEN])
         assert plan.best_gas_at(Pressure.from_depth_m(35)) is None
 
-    def test_limits_read_from_config(self):
+    def test_selection_limits_read_from_config(self):
+        # best_gas_at follows the configured deco window via Gas.is_breathable.
         DiveConfig.current().gas.deco_ppo2_bar = 1.4
-        assert not GasPlan.is_breathable(EAN50, Pressure.from_depth_m(21))
+        assert GasPlan([AIR, EAN50]).best_gas_at(Pressure.from_depth_m(21)) == AIR
 
 
 # ------------------------------------------------------------------
@@ -161,8 +149,7 @@ class TestPlanAscentDeco:
         # the diver must never be shallower than the ceiling prevailing at
         # that moment (continuation ascents make departure-time checks too
         # strict — off-gassing en route is what clears the next target).
-        gradient = Gradient(0.3, 0.7)
-        model = loaded_model(40, 25, gradient)
+        model = loaded_model(40, 25, Gradient(0.3, 0.7))
         plan = plan_ascent(model, Pressure.from_depth_m(40), AIR)
 
         first_stop = next(
@@ -173,12 +160,7 @@ class TestPlanAscentDeco:
         for segment in plan:
             verify.integrate_segment(segment)
             here = segment.end_pressure
-            gf = (
-                gradient.factor(here, first_stop)
-                if first_stop is not None
-                else gradient.gf_low
-            )
-            assert verify.get_ceiling(gf) <= here
+            assert verify.get_ascent_ceiling(here, first_stop) <= here
 
     def test_lower_gf_longer_schedule(self):
         conservative = plan_ascent(
@@ -208,7 +190,7 @@ class TestPlanAscentDeco:
         assert len(switches) == 1
         assert switches[0].gas == EAN50
         # Switch must happen where EAN50 is breathable (≤ ~21 m).
-        assert GasPlan.is_breathable(EAN50, switches[0].start_pressure)
+        assert EAN50.is_breathable(switches[0].start_pressure)
         assert_plan_well_formed(with_deco_gas, Pressure.from_depth_m(40))
 
     def test_stop_departures_align_to_dive_clock(self):

@@ -277,12 +277,31 @@ class TestZHL16CModel:
         assert model.get_ceiling() > Pressure.surface()
 
     def test_lower_gf_raises_ceiling(self):
+        # GF is instance configuration — compare two models over one dive.
         bottom = DiveSegment(
             Pressure.from_depth_m(40), Pressure.from_depth_m(40), 30, AIR
         )
-        model = ZHL16C()
+        conservative = ZHL16C(gradient=Gradient(0.3, 0.3))
+        liberal = ZHL16C(gradient=Gradient(1.0, 1.0))
+        for model in (conservative, liberal):
+            model.integrate_segment(bottom)
+        assert conservative.get_ceiling() > liberal.get_ceiling()
+
+    def test_ascent_ceiling_interpolates_gf(self):
+        bottom = DiveSegment(
+            Pressure.from_depth_m(40), Pressure.from_depth_m(40), 30, AIR
+        )
+        model = ZHL16C(gradient=Gradient(0.3, 0.7))
         model.integrate_segment(bottom)
-        assert model.get_ceiling(0.3) > model.get_ceiling(1.0)
+        anchor = Pressure.from_depth_m(21)
+        # Unanchored (first stop unknown): the conservative GF-low ceiling.
+        assert model.get_ascent_ceiling(Pressure.surface()) == model.get_ceiling()
+        # At the anchor itself GF-low applies; toward the surface the factor
+        # relaxes to GF-high, so the ceiling drops below the GF-low bound.
+        assert model.get_ascent_ceiling(anchor, anchor) == model.get_ceiling()
+        assert (
+            model.get_ascent_ceiling(Pressure.surface(), anchor) < model.get_ceiling()
+        )
 
     def test_integrate_segment_returns_state(self):
         model = ZHL16C()

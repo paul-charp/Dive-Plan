@@ -15,12 +15,12 @@ Algorithm (standard staged-decompression loop):
    shallower target clears.
 4. Repeat until surfaced.
 
-Gradient-factor models: the ceiling test for a target uses the GF
-interpolated at that target's depth (GF-low anchored at the deepest stop of
-*this* ascent, GF-high at the surface). Until the first stop is known the
-conservative GF-low applies. Non-GF models (VPM-B) are asked for their plain
-ceiling; note that VPM-B's Critical Volume Algorithm and Boyle compensation
-are not applied yet — its schedules use the conservative pre-CVA gradients.
+The planner is model-agnostic: the ceiling test delegates to
+``BaseDecoModel.get_ascent_ceiling(target, first_stop)``, so any
+ascent-context behavior (Bühlmann's gradient-factor interpolation, VPM-B's
+future Boyle/CVA compensation) lives in the model, never here. VPM-B
+currently uses the default plain ceiling — its schedules use the
+conservative pre-CVA gradients.
 """
 
 from datetime import timedelta
@@ -31,7 +31,6 @@ from diveplan.core.dive_segment import DiveSegment, SegmentKind
 from diveplan.core.gas import Gas
 from diveplan.core.pressure import Pressure
 from diveplan.models.base import BaseDecoModel
-from diveplan.models.buhlmann.model import BuhlmannModel
 from diveplan.planning.gas_plan import GasPlan
 from diveplan.utils.conversions import coerce_depth_to_pressure, coerce_gas
 
@@ -44,22 +43,6 @@ _MAX_ITERATIONS = 100_000
 
 class AscentNotConvergingError(RuntimeError):
     """The stop loop failed to clear the next target within the iteration cap."""
-
-
-def _ceiling(
-    model: BaseDecoModel[Any],
-    target: Pressure,
-    first_stop: Pressure | None,
-) -> Pressure:
-    """Model ceiling for an ascent-to-`target` test.
-
-    GF models interpolate the gradient factor at the target depth once the
-    first (deepest) stop is anchored; before that, and for non-GF models,
-    the model's default (conservative) ceiling applies.
-    """
-    if isinstance(model, BuhlmannModel) and first_stop is not None:
-        return model.get_ceiling(model.gradient.factor(target, first_stop))
-    return model.get_ceiling()
 
 
 def _next_targets(current: Pressure) -> list[Pressure]:
@@ -164,7 +147,7 @@ def plan_ascent(
 
     def reachable(target: Pressure) -> bool:
         """Whether the ceiling permits ascending to `target` right now."""
-        return _ceiling(work, target, first_stop) <= target
+        return work.get_ascent_ceiling(target, first_stop) <= target
 
     for _ in range(_MAX_ITERATIONS):
         if current <= surface:
@@ -180,8 +163,8 @@ def plan_ascent(
                 return plan
             continue
 
-        # No target clears: `current` is a stop. The first (deepest) stop of
-        # the ascent anchors GF-low for gradient-factor interpolation.
+        # No target clears: `current` is a stop. The first (deepest) stop
+        # anchors the model's ascent-context ceiling (get_ascent_ceiling).
         if first_stop is None:
             first_stop = current
 

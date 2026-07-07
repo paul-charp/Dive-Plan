@@ -288,10 +288,13 @@ class TestDiveContinuation:
         full = dive.with_ascent(gases)
         assert full.profile.segments[-1].end_pressure == Pressure.surface()
         # At surfacing the GF-high ceiling must clear the surface (that is
-        # the planner's criterion; the default get_ceiling() is the
-        # conservative GF-low bound and legitimately does not).
+        # the planner's criterion; get_ceiling() is the conservative GF-low
+        # bound and legitimately does not). GF is instance configuration —
+        # view the surfaced state through a GF 70/70 model.
         surfaced = full.model_at(full.profile.runtime)
-        assert surfaced.get_ceiling(0.7) <= Pressure.surface()
+        gf_high_view = ZHL16C(gradient=Gradient(0.7, 0.7))
+        gf_high_view.set_state(surfaced.get_state())
+        assert gf_high_view.get_ceiling() <= Pressure.surface()
 
 
 # ------------------------------------------------------------------
