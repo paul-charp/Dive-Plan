@@ -227,7 +227,10 @@ uv run mypy src       # type-check (strict)
 
 ## Documentation
 
-API docs are built with Sphinx (furo theme):
+API docs are published at **<https://paul-charp.github.io/Dive-Plan/>**
+(rebuilt automatically on every push to `main`).
+
+To build them locally with Sphinx (furo theme):
 
 ```bash
 uv run sphinx-build -b html docs/source docs/_build/html

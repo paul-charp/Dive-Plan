@@ -37,6 +37,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/paul-charp/Dive-Plan"
+Documentation = "https://paul-charp.github.io/Dive-Plan/"
 Repository = "https://github.com/paul-charp/Dive-Plan"
 Issues = "https://github.com/paul-charp/Dive-Plan/issues"
 
