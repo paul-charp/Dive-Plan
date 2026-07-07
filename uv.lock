@@ -201,11 +201,8 @@ name = "diveplan"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "furo" },
     { name = "pydantic" },
     { name = "rich" },
-    { name = "sphinx" },
-    { name = "sphinx-autodoc-typehints" },
 ]
 
 [package.optional-dependencies]
@@ -223,18 +220,20 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
 ]
+docs = [
+    { name = "furo" },
+    { name = "sphinx" },
+    { name = "sphinx-autodoc-typehints" },
+]
 
 [package.metadata]
 requires-dist = [
-    { name = "furo", specifier = ">=2025.12.19" },
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest-cov", marker = "extra == 'dev'" },
     { name = "rich", specifier = ">=15.0.0" },
     { name = "ruff", marker = "extra == 'dev'" },
-    { name = "sphinx", specifier = ">=9.1.0" },
-    { name = "sphinx-autodoc-typehints", specifier = ">=3.10.2" },
 ]
 provides-extras = ["dev"]
 
@@ -244,6 +243,11 @@ dev = [
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "ruff", specifier = ">=0.15.14" },
+]
+docs = [
+    { name = "furo", specifier = ">=2025.12.19" },
+    { name = "sphinx", specifier = ">=9.1.0" },
+    { name = "sphinx-autodoc-typehints", specifier = ">=3.10.2" },
 ]
 
 [[package]]
