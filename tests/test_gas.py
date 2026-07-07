@@ -6,6 +6,7 @@ needs no installed diveplan package beyond gas.py itself.
 
 import pytest
 
+from diveplan.core.config import DiveConfig
 from diveplan.core.gas import Gas
 from diveplan.core.pressure import Pressure
 
@@ -255,6 +256,30 @@ class TestEnd:
         p = Pressure.from_depth_m(10)
         end = Gas.oxygen().end(p)
         assert approx(end.bar, p.bar, tol=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# is_breathable
+# ---------------------------------------------------------------------------
+
+
+class TestIsBreathable:
+    def test_breathability_window(self):
+        ean50 = Gas.nitrox(0.50)
+        # EAN50 at 21 m: ppO2 ≈ 1.56 bar — inside the 1.6 deco limit.
+        assert ean50.is_breathable(Pressure.from_depth_m(21))
+        # EAN50 at 30 m: ppO2 ≈ 2.0 bar — out.
+        assert not ean50.is_breathable(Pressure.from_depth_m(30))
+        # Air at the surface is fine; oxygen at 30 m is not.
+        assert Gas.air().is_breathable(Pressure.surface())
+        assert not Gas.oxygen().is_breathable(Pressure.from_depth_m(30))
+
+    def test_hypoxic_floor(self):
+        assert not Gas.trimix(0.10, 0.70).is_breathable(Pressure.surface())
+
+    def test_limits_read_from_config(self):
+        DiveConfig.current().gas.deco_ppo2_bar = 1.4
+        assert not Gas.nitrox(0.50).is_breathable(Pressure.from_depth_m(21))
 
 
 # ---------------------------------------------------------------------------

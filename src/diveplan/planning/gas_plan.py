@@ -1,10 +1,9 @@
 """Gas plan: carried gases, selection, consumption, and reserve planning.
 
-Selection reads the ppO2 limits from ``DiveConfig.current().gas`` at call
-time: a gas is usable at a pressure if its ppO2 sits within
-``[min_ppo2_bar, deco_ppo2_bar]`` (the deco limit — the planner switches
-gases during ascent, where the deco ppO2 applies). Among usable gases the
-richest (highest fO2) wins: it off-gasses inert load fastest.
+Selection delegates breathability to :meth:`Gas.is_breathable` (the
+configured deco ppO2 window — the planner switches gases during ascent,
+where the deco limit applies). Among breathable carried gases the richest
+(highest fO2) wins: it off-gasses inert load fastest.
 
 Everything about breathing gas over a dive lives here: :class:`GasPlan`
 (selection), :func:`gas_consumption` (surface litres per gas),
@@ -68,16 +67,13 @@ class GasPlan:
         """The carried gases (duplicates removed, insertion order)."""
         return self._gases
 
-    @staticmethod
-    def is_breathable(gas: Gas, pressure: Pressure) -> bool:
-        """Whether `gas` is within the configured deco ppO2 window here."""
-        limits = DiveConfig.current().gas
-        ppo2 = gas.ppo2(pressure).bar
-        return limits.min_ppo2_bar <= ppo2 <= limits.deco_ppo2_bar
-
     def best_gas_at(self, pressure: Pressure) -> Gas | None:
-        """Richest breathable gas at `pressure`, or None if none qualifies."""
-        candidates = [g for g in self._gases if self.is_breathable(g, pressure)]
+        """Richest breathable gas at `pressure`, or None if none qualifies.
+
+        Breathability is :meth:`Gas.is_breathable` — the configured deco
+        ppO2 window.
+        """
+        candidates = [g for g in self._gases if g.is_breathable(pressure)]
         if not candidates:
             return None
         return max(candidates, key=lambda g: g.fo2)
