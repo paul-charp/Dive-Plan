@@ -36,6 +36,7 @@ from diveplan.planning.ascent_plan import plan_ascent
 from diveplan.planning.gas_plan import (
     GasPlan,
     cns_percent,
+    deco_gas_consumption,
     gas_consumption,
     otu,
     rock_bottom,
@@ -82,6 +83,44 @@ class TestGasConsumption:
         assert set(totals) == {AIR, EAN50}
         assert totals[AIR] == pytest.approx(400.0)
         assert totals[EAN50] == pytest.approx(150.0)  # deco SAC 15 by default
+
+
+# ------------------------------------------------------------------
+# Deco-phase consumption
+# ------------------------------------------------------------------
+
+
+class TestDecoGasConsumption:
+    def test_only_deco_kinds_count(self):
+        bottom = DiveSegment(
+            two_atm(), two_atm(), 10, AIR, constant_kind=SegmentKind.Constant.BOTTOM
+        )
+        stop = DiveSegment(
+            two_atm(), two_atm(), 10, AIR, constant_kind=SegmentKind.Constant.STOP
+        )
+        # Only the stop: 10 min at 2 atm, deco SAC 15 L/min -> 300 L.
+        assert deco_gas_consumption([bottom, stop]) == {AIR: pytest.approx(300.0)}
+
+    def test_gas_absent_from_deco_is_absent_from_the_result(self):
+        bottom = DiveSegment(
+            two_atm(), two_atm(), 10, AIR, constant_kind=SegmentKind.Constant.BOTTOM
+        )
+        stop = DiveSegment(
+            two_atm(), two_atm(), 10, EAN50, constant_kind=SegmentKind.Constant.STOP
+        )
+        assert set(deco_gas_consumption([bottom, stop])) == {EAN50}
+
+    def test_never_exceeds_the_whole_dive_figure(self):
+        report = full_dive_report()
+        totals = dict(report.consumption_l)
+        for gas, litres in report.deco_consumption_l:
+            assert 0 < litres <= totals[gas]
+
+    def test_deco_only_gas_is_fully_deco(self):
+        report = full_dive_report()
+        assert dict(report.deco_consumption_l)[EAN50] == pytest.approx(
+            dict(report.consumption_l)[EAN50]
+        )
 
 
 # ------------------------------------------------------------------
@@ -222,6 +261,11 @@ class TestDiveReport:
         assert report.otus > 0
         assert report.rock_bottom_l == pytest.approx(rock_bottom(40), rel=1e-6)
         assert isinstance(report.tts_variations, TtsVariations)
+        assert {g for g, _ in report.deco_consumption_l} == {AIR, EAN50}
+        # The dive is bottom + its own planned ascent, so the peak TTS is
+        # exactly the ascent it carries.
+        bottom_runtime = report.rows[1].runtime  # descent + bottom
+        assert report.max_tts == report.runtime - bottom_runtime
 
     def test_sac_captured_from_config(self):
         cfg = DiveConfig.current().gas
@@ -246,6 +290,8 @@ class TestDiveReport:
         assert "SAC: bottom 20 L/min, deco 15 L/min" in text
         assert "rock bottom @ 40 m (SAC x2)" in text
         assert "TTS variation" in text
+        assert "max TTS" in text
+        assert "(deco" in text  # per-gas deco share
 
     def test_json_formatter_round_trips(self):
         document = jsonlib.loads(JsonFormatter().format(full_dive_report()))
@@ -260,6 +306,12 @@ class TestDiveReport:
         }
         assert document["cns_percent"] > 0
         assert document["tts_variations"]["per_minute_s"] > 0
+        assert document["max_tts_s"] > 0
+        assert (
+            document["deco_consumption_l"]["EAN50"]
+            == document["consumption_l"]["EAN50"]
+        )
+        assert document["deco_consumption_l"]["Air"] < document["consumption_l"]["Air"]
 
     def test_subsurface_formatter_structure(self):
         xml = SubsurfaceXmlFormatter().format(full_dive_report())
@@ -307,7 +359,9 @@ class TestRuntimeFormatter:
 
     def test_header_shows_gf(self):
         text = RuntimeFormatter().format(full_dive_report())
-        assert text.splitlines()[0].startswith("DIVE PLAN - zhl16c GF 30/70")
+        header = text.splitlines()[0]
+        assert header.startswith("DIVE PLAN - zhl16c GF 30/70")
+        assert "max TTS" in header
 
     def test_header_shows_vpm_conservatism(self):
         profile = DiveProfile().descend_to("15 m").stay(10).surface()
@@ -320,6 +374,7 @@ class TestRuntimeFormatter:
         text = RuntimeFormatter().format(full_dive_report())
         assert "rock bottom" in text
         assert "sac          bottom 20 / deco 15 L/min | rock bottom x2" in text
+        assert "deco gas     Air" in text and "EAN50" in text
         assert "CNS" in text and "OTU" in text
         assert "DO NOT USE FOR REAL DIVES" in text
 

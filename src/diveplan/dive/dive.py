@@ -13,6 +13,7 @@ Queries and operations:
 - ``cns_at(t)`` / ``otu_at(t)`` — oxygen exposure accumulated by ``t``
 - ``tissue_series(dt)`` — (time, state) samples for visualization
 - ``tts(t)`` — time-to-surface: a counterfactual ascent planned from ``t``
+- ``max_tts()`` — the peak of that over the dive: the deco obligation
 - ``plan_ascent()`` — the deco schedule from the dive's current end
 - ``with_ascent()`` / ``extend()`` — a new Dive continuing this one
 
@@ -202,6 +203,51 @@ class Dive[StateT: DecoState]:
             clock_offset=t,  # stop departures align to the dive clock
         )
         return sum((s.duration for s in ascent), timedelta(0))
+
+    def max_tts(self, gas_plan: GasPlan | None = None) -> timedelta:
+        """Peak time-to-surface over the dive — the largest :meth:`tts` at any
+        segment boundary.
+
+        This is the deco obligation the plan has to carry. On a bottom-phase
+        dive it is the TTS at the moment of leaving the bottom; on a full dive
+        (bottom plus its planned ascent) it is the same figure, found at the
+        boundary where the ascent begins. Only boundaries are examined: TTS
+        rises while on-gassing at depth and falls through the ascent, so its
+        maximum sits on a seam, and the stored checkpoints make each one free
+        of re-integration.
+
+        Costs one ascent plan per boundary — keep the returned value rather
+        than calling this inside a loop.
+
+        Args:
+            gas_plan: Deco gases available for the hypothetical ascents.
+                Defaults to all gases appearing in the profile.
+        """
+        segments = self._profile.segments
+        if not segments:
+            return timedelta(0)
+        if gas_plan is None:
+            gas_plan = GasPlan(self._unique_gases())
+
+        surface = Pressure.surface()
+        peak = timedelta(0)
+        elapsed = timedelta(0)
+        for index, state in enumerate(self._checkpoints):
+            if index:
+                elapsed += segments[index - 1].duration
+            pressure = (
+                segments[0].start_pressure
+                if index == 0
+                else segments[index - 1].end_pressure
+            )
+            if pressure.mbar <= surface.mbar:
+                continue  # already at the surface: nothing to ascend
+            # Forward-looking gas, matching the profile's seam convention.
+            gas = segments[index].gas if index < len(segments) else segments[-1].gas
+            work = self._model.copy()
+            work.set_state(state)
+            peak = max(peak, _ascent_duration(work, pressure, gas, gas_plan, elapsed))
+        return peak
 
     # ------------------------------------------------------------------
     # Continuing the dive

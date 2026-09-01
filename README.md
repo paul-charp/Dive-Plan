@@ -13,7 +13,7 @@ simulations comparing algorithms, gases, and conditions.
 
 ## Status
 
-Early development — **all layers below are implemented and tested** (483 tests, strict mypy):
+Early development — **all layers below are implemented and tested** (493 tests, strict mypy):
 
 | Component | Status |
 |---|---|
@@ -24,10 +24,10 @@ Early development — **all layers below are implemented and tested** (483 tests
 | `DiveProfile` — builder, validation & repair, timeline | ✅ |
 | Plugin registry (entry-point deco-model discovery) | ✅ |
 | Deco models — Bühlmann ZHL-16C (GF), VPM-B (pre-CVA) | ✅ |
-| `Dive` — checkpoints, `state_at`/`ceiling_at`/`tts(t)`, `with_ascent` | ✅ |
+| `Dive` — checkpoints, `state_at`/`ceiling_at`/`tts(t)`/`max_tts()`, `with_ascent` | ✅ |
 | Ascent planner (`Dive.plan_ascent()`) + `GasPlan` | ✅ |
 | `DiveReport` + formatters (console, rich, runtime sheet, JSON, Subsurface XML) | ✅ |
-| Gas consumption, rock bottom, CNS/OTU, TTS variations | ✅ |
+| Gas consumption (whole dive & deco phase), rock bottom, CNS/OTU, max TTS, TTS variations | ✅ |
 | VPM-B critical-volume/Boyle stage | 🚧 in progress |
 
 ## Design principles
@@ -174,6 +174,7 @@ dive = Dive.run(bottom, ZHL16C(gradient="30/70"))
 
 dive.ceiling_at(23).depth_m   # deco ceiling 23 minutes into the dive
 dive.tts(23)                  # time-to-surface if ascending right now
+dive.max_tts()                # peak TTS over the dive: the deco obligation
 dive.cns_at(23), dive.otu_at(23)   # oxygen exposure accumulated so far
 for t, state in dive.tissue_series(1):   # tissue loading, 1-min samples
     ...
