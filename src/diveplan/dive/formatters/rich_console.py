@@ -107,8 +107,12 @@ class RichConsoleFormatter(BaseFormatter):
             "SAC bottom / deco",
             f"{report.sac_bottom:g} / {report.sac_deco:g} L/min",
         )
+        summary.add_row("max TTS", f"{_minutes(report.max_tts)} min")
+        deco_litres = dict(report.deco_consumption_l)
         for gas, litres in report.consumption_l:
-            summary.add_row(f"{gas.name} consumed", f"{litres:.0f} L")
+            deco = deco_litres.get(gas, 0.0)
+            detail = f" (deco {deco:.0f} L)" if deco else ""
+            summary.add_row(f"{gas.name} consumed", f"{litres:.0f} L{detail}")
         summary.add_row(
             f"rock bottom @ {report.max_depth.depth_m:.0f} m "
             f"(SAC ×{report.sac_factor:g})",

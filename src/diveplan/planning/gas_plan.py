@@ -6,7 +6,8 @@ where the deco limit applies). Among breathable carried gases the richest
 (highest fO2) wins: it off-gasses inert load fastest.
 
 Everything about breathing gas over a dive lives here: :class:`GasPlan`
-(selection), :func:`gas_consumption` (surface litres per gas),
+(selection), :func:`gas_consumption` / :func:`deco_gas_consumption`
+(surface litres per gas, whole dive or deco phase only),
 :func:`rock_bottom` (emergency reserve), and the oxygen-exposure trackers
 :func:`cns_percent` / :func:`otu`. The accounting functions all take any
 sequence of segments — a profile's or an ascent plan's. They are module
@@ -27,6 +28,7 @@ from diveplan.utils.conversions import coerce_depth_to_pressure, coerce_gas
 __all__ = [
     "GasPlan",
     "gas_consumption",
+    "deco_gas_consumption",
     "rock_bottom",
     "cns_percent",
     "otu",
@@ -104,6 +106,22 @@ def gas_consumption(segments: Iterable[DiveSegment]) -> dict[Gas, float]:
         litres = sac * segment.average_pressure.atm * minutes
         totals[segment.gas] = totals.get(segment.gas, 0.0) + litres
     return totals
+
+
+def deco_gas_consumption(segments: Iterable[DiveSegment]) -> dict[Gas, float]:
+    """Surface litres of each gas consumed in the **deco phase** of `segments`.
+
+    Same accounting as :func:`gas_consumption`, restricted to the segments
+    billed at ``gas.sac_deco`` — deco ascents, stops, and gas switches. It
+    is the "how much deco gas do I need" figure: on a full dive it covers
+    everything from leaving the bottom, and a gas absent from the result was
+    never breathed in deco.
+
+    Note that the ascent from the bottom to the first stop is a deco ascent,
+    so it counts here; a no-stop dive's plain ascent to the surface (a
+    forced ascent) does not.
+    """
+    return gas_consumption(s for s in segments if s.kind in _DECO_KINDS)
 
 
 def rock_bottom(

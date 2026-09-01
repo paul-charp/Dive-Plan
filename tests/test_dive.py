@@ -18,6 +18,7 @@ from diveplan.dive.dive import Dive
 from diveplan.models.buhlmann.common import Gradient
 from diveplan.models.buhlmann.zhl16 import ZHL16C
 from diveplan.models.vpm.model import VpmB
+from diveplan.planning.gas_plan import GasPlan
 
 AIR = Gas.air()
 
@@ -241,6 +242,57 @@ class TestDiveQueries:
         late = result.tts(bottom_start + timedelta(minutes=25))
         assert late > early
         assert late > timedelta(minutes=10)  # real deco obligation
+
+
+# ------------------------------------------------------------------
+# Max TTS
+# ------------------------------------------------------------------
+
+
+class TestMaxTts:
+    def test_bottom_dive_peaks_at_the_end(self):
+        profile = DiveProfile().descend_to("40 m").stay(25)
+        result = Dive.run(profile, ZHL16C(gradient=Gradient(0.3, 0.7)))
+        gases = GasPlan([AIR, Gas.nitrox(0.50)])
+        assert result.max_tts(gases) == result.tts(profile.runtime, gases)
+
+    def test_full_dive_peak_is_the_ascent_duration(self):
+        bottom = DiveProfile().descend_to("40 m").stay(25)
+        gases = GasPlan([AIR, Gas.nitrox(0.50)])
+        model = ZHL16C(gradient=Gradient(0.3, 0.7))
+        bottom_dive = Dive.run(bottom, model)
+        full = bottom_dive.with_ascent(gases)
+        # Appending the planned ascent does not change the obligation: the
+        # peak still sits at the boundary where the ascent starts.
+        assert full.max_tts(gases) == bottom_dive.max_tts(gases)
+        assert full.max_tts(gases) == full.profile.runtime - bottom.runtime
+
+    def test_never_below_any_boundary_tts(self):
+        profile = switch_profile()
+        result = Dive.run(profile, ZHL16C(gradient=Gradient(0.3, 0.7)))
+        peak = result.max_tts()
+        elapsed = timedelta(0)
+        for segment in profile.segments:
+            assert result.tts(elapsed) <= peak
+            elapsed += segment.duration
+        assert result.tts(elapsed) <= peak
+
+    def test_no_deco_dive_is_the_direct_ascent(self):
+        from diveplan.core.config import DiveConfig
+
+        profile = DiveProfile().descend_to("12 m").stay(10).surface()
+        result = Dive.run(profile, ZHL16C())
+        expected = timedelta(minutes=12 / DiveConfig.current().planning.ascent_rate)
+        assert abs(result.max_tts() - expected) < timedelta(seconds=5)
+
+    def test_empty_profile_is_zero(self):
+        assert Dive.run(DiveProfile(), ZHL16C()).max_tts() == timedelta(0)
+
+    def test_query_does_not_mutate_the_dive(self):
+        result = Dive.run(simple_profile(), ZHL16C())
+        final_before = result.final_state
+        result.max_tts()
+        assert result.final_state == final_before
 
 
 # ------------------------------------------------------------------

@@ -1,6 +1,6 @@
 # diveplan codebase index
 
-Auto-generated API map (regenerate: `uv run python .claude/generate-index.py`). Generated 2026-07-07.
+Auto-generated API map (regenerate: `uv run python .claude/generate-index.py`). Generated 2026-09-01.
 
 Read this instead of source files when you only need signatures/structure. Read the actual source before *editing* anything listed here.
 
@@ -163,6 +163,7 @@ Dive: a deco model run over a profile, queryable and extendable.
   - `_segments_until(self, t: timedelta | float) -> list[DiveSegment]`  — The profile's segments up to `t`, the last one truncated exactly.
   - `tissue_series(self, interval: timedelta | float) -> Iterator[tuple[timedelta, StateT]]`  — Yield (time, state) at each sample step — for tissue plots.
   - `tts(self, t: timedelta | float, gas_plan: GasPlan | None = None) -> timedelta`  — Time-to-surface at runtime `t`: the duration of an ascent planned
+  - `max_tts(self, gas_plan: GasPlan | None = None) -> timedelta`  — Peak time-to-surface over the dive — the largest :meth:`tts` at any
   - `plan_ascent(self, gas_plan: GasPlan | None = None) -> list[DiveSegment]`  — Deco schedule from the dive's current end to the surface.
   - `extend(self, segments: list[DiveSegment]) -> 'Dive[StateT]'`  — New Dive with `segments` appended and integrated.
   - `with_ascent(self, gas_plan: GasPlan | None = None) -> 'Dive[StateT]'`  — New Dive completed with its planned deco ascent —
@@ -269,10 +270,10 @@ Dive report: everything about a computed dive, ready for presentation.
 ### class `ReportRow` (NamedTuple) — One schedule line: a segment with its cumulative runtime at the end.
   attrs: `runtime: timedelta; start_depth_m: float; end_depth_m: float; duration: timedelta; gas: Gas; kind: str`
 ### class `DiveReport` — Immutable summary of a computed dive.
-  `__slots__ = ('profile', 'model_name', 'rows', 'runtime', 'max_depth', 'consumption_l', 'cns', 'otus', 'rock_bottom_l', 'sac_bottom', 'sac_deco', 'sac_factor', 'tts_variations')`
-  - `__init__(self, *, profile: DiveProfile, model_name: str, rows: tuple[ReportRow, ...], runtime: timedelta, max_depth: Pressure, consumption_l: tuple[tuple[Gas, float], ...], cns: float, otus: float, rock_bottom_l: float, sac_bottom: float, sac_deco: float, sac_factor: float, tts_variations: TtsVariations | None)`
-  - @classmethod `from_dive(cls, dive: Dive[DecoState], *, gas_plan: GasPlan | None = None, tts_variations: TtsVariations | None = None) -> 'DiveReport'`  — Assemble a report from a computed dive.
-  attrs: `profile: DiveProfile; model_name: str; rows: tuple[ReportRow, ...]; runtime: timedelta; max_depth: Pressure; consumption_l: tuple[tuple[Gas, float], ...]; cns: float; otus: float; rock_bottom_l: float; sac_bottom: float; sac_deco: float; sac_factor: float; tts_variations: TtsVariations | None`
+  `__slots__ = ('profile', 'model_name', 'rows', 'runtime', 'max_depth', 'consumption_l', 'deco_consumption_l', 'max_tts', 'cns', 'otus', 'rock_bottom_l', 'sac_bottom', 'sac_deco', 'sac_factor', 'tts_variations')`
+  - `__init__(self, *, profile: DiveProfile, model_name: str, rows: tuple[ReportRow, ...], runtime: timedelta, max_depth: Pressure, consumption_l: tuple[tuple[Gas, float], ...], deco_consumption_l: tuple[tuple[Gas, float], ...], max_tts: timedelta, cns: float, otus: float, rock_bottom_l: float, sac_bottom: float, sac_deco: float, sac_factor: float, tts_variations: TtsVariations | None)`
+  - @classmethod `from_dive(cls, dive: Dive[DecoState], *, gas_plan: GasPlan | None = None, max_tts: timedelta | None = None, tts_variations: TtsVariations | None = None) -> 'DiveReport'`  — Assemble a report from a computed dive.
+  attrs: `profile: DiveProfile; model_name: str; rows: tuple[ReportRow, ...]; runtime: timedelta; max_depth: Pressure; consumption_l: tuple[tuple[Gas, float], ...]; deco_consumption_l: tuple[tuple[Gas, float], ...]; max_tts: timedelta; cns: float; otus: float; rock_bottom_l: float; sac_bottom: float; sac_deco: float; sac_factor: float; tts_variations: TtsVariations | None`
   dunders: `__repr__`
 
 ## `src/diveplan/dive/formatters/__init__.py`
@@ -471,7 +472,7 @@ Ascent planner: compute the decompression schedule from a model state.
 
 ## `src/diveplan/planning/gas_plan.py`
 Gas plan: carried gases, selection, consumption, and reserve planning.
-`__all__ = ['GasPlan', 'gas_consumption', 'rock_bottom', 'cns_percent', 'otu', 'NOAA_CNS_LIMITS']`
+`__all__ = ['GasPlan', 'gas_consumption', 'deco_gas_consumption', 'rock_bottom', 'cns_percent', 'otu', 'NOAA_CNS_LIMITS']`
 ### class `GasPlan` — An ordered collection of carried gases with depth-based selection.
   `__slots__ = ('_gases',)`
   - `__init__(self, gases: Iterable[Gas | str])`
@@ -479,6 +480,7 @@ Gas plan: carried gases, selection, consumption, and reserve planning.
   - `best_gas_at(self, pressure: Pressure) -> Gas | None`  — Richest breathable gas at `pressure`, or None if none qualifies.
   dunders: `__repr__`
 - `gas_consumption(segments: Iterable[DiveSegment]) -> dict[Gas, float]`  — Surface litres of each gas consumed over `segments`.
+- `deco_gas_consumption(segments: Iterable[DiveSegment]) -> dict[Gas, float]`  — Surface litres of each gas consumed in the **deco phase** of `segments`.
 - `rock_bottom(depth: Pressure | str | float, *, divers: int = 2) -> float`  — Minimum gas reserve (surface litres) at `depth` for an emergency.
 - `_cns_limit_minutes(ppo2_bar: float) -> float | None`  — NOAA limit at `ppo2_bar`, linearly interpolated; None below the floor.
 - `_iter_ppo2(segments: Iterable[DiveSegment], step: timedelta) -> Iterable[tuple[float, float]]`  — Yield (minutes, ppO2 bar) exposures: one per constant segment, midpoint
@@ -523,11 +525,11 @@ Argument-coercion helpers shared across the user-facing API.
 - `conftest.py` (0 tests)
 - `test_buhlmann.py` (48 tests) — TestGradient, TestCompartmentState, TestCompartmentIntegration, TestCompartmentToleratedPressure, TestZHL16CTables, TestZHL16CModel, MiniBuhlmann, TestBuhlmannFamily, TestZHL16CRegistry
 - `test_config.py` (45 tests) — TestSubConfigBase, TestPhysicsConfig, TestGasConfig, TestDivePlanningConfig, TestDiveConfigStructure, TestGlobalDefault, TestContextManager, TestDefaultConfigLoading, TestSerialization
-- `test_dive.py` (28 tests) — TestIterSamples, TestDiveRun, TestDiveQueries, TestDiveContinuation, TestOxygenQueries
+- `test_dive.py` (34 tests) — TestIterSamples, TestDiveRun, TestDiveQueries, TestMaxTts, TestDiveContinuation, TestOxygenQueries
 - `test_dive_profile.py` (74 tests) — TestDiveProfileBuilder, TestDiveProfileValidation, TestDiveProfileFixes, TestDiveProfileTimeline, TestDiveProfileFluentBuilders, TestDiveProfileSerialization
 - `test_dive_segment.py` (59 tests) — TestDiveSegmentConstruction, TestDiveSegmentProperties, TestDiveSegmentInterpolation, TestDiveSegmentSplitting, TestDiveSegmentMerging, TestDiveSegmentContinuity, TestDiveSegmentIteration, TestDiveSegmentMagicMethods, TestDiveSegmentImmutability, TestDiveSegmentSerialization
 - `test_gas.py` (64 tests) — TestRawConstruction, TestNamedConstructors, TestFromName, TestPartialPressures, TestMod, TestEnd, TestIsBreathable, TestBestMix, TestEqualityAndHash, TestStringRepresentation
 - `test_planning.py` (16 tests) — TestGasPlan, TestPlanAscentNoDeco, TestPlanAscentDeco
 - `test_pressure.py` (70 tests) — TestConstruction, TestProperties, TestAltConstructorsAndProperties, TestStringParsing, TestImmutability, TestAddition, TestSubtraction, TestMultiplication, TestDivision, TestOrdering, TestHashing, TestDisplay
-- `test_report.py` (39 tests) — TestGasConsumption, TestRockBottom, TestOxygenExposure, TestTtsVariations, TestDiveReport, TestRuntimeFormatter, TestRichConsoleFormatter, TestFormatterRegistry, TestBaseFormatterContract
+- `test_report.py` (43 tests) — TestGasConsumption, TestDecoGasConsumption, TestRockBottom, TestOxygenExposure, TestTtsVariations, TestDiveReport, TestRuntimeFormatter, TestRichConsoleFormatter, TestFormatterRegistry, TestBaseFormatterContract
 - `test_vpm.py` (24 tests) — TestBubbleMechanics, TestVpmBModel, TestVpmBRegistry

@@ -60,7 +60,8 @@ class ConsoleFormatter(BaseFormatter):
         lines = [
             f"Dive plan — {report.model_name}",
             f"runtime {_minutes(report.runtime).strip()}, "
-            f"max depth {report.max_depth.depth_m:.1f} m",
+            f"max depth {report.max_depth.depth_m:.1f} m, "
+            f"max TTS {_minutes(report.max_tts).strip()}",
             f"SAC: bottom {report.sac_bottom:g} L/min, deco {report.sac_deco:g} L/min",
         ]
         if report.tts_variations is not None:
@@ -74,8 +75,11 @@ class ConsoleFormatter(BaseFormatter):
         lines.extend(_row_line(row) for row in report.rows)
         lines.append("")
 
+        deco_litres = dict(report.deco_consumption_l)
         for gas, litres in report.consumption_l:
-            lines.append(f"  {gas.name:<6} consumed : {litres:7.0f} L")
+            deco = deco_litres.get(gas, 0.0)
+            suffix = f"  (deco {deco:.0f} L)" if deco else ""
+            lines.append(f"  {gas.name:<6} consumed : {litres:7.0f} L{suffix}")
         lines.append(
             f"  rock bottom @ {report.max_depth.depth_m:.0f} m "
             f"(SAC x{report.sac_factor:g}) : {report.rock_bottom_l:7.0f} L"

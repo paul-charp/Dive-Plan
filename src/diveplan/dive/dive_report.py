@@ -1,8 +1,8 @@
 """Dive report: everything about a computed dive, ready for presentation.
 
 :class:`DiveReport` is pure data assembled from a :class:`~diveplan.dive.dive.Dive` — the
-schedule rows plus derived figures (gas consumption, CNS/OTU, rock bottom,
-TTS variations). Formatters (`diveplan.dive.formatters`) turn a report into
+schedule rows plus derived figures (gas consumption whole-dive and deco
+only, max TTS, CNS/OTU, rock bottom, TTS variations). Formatters (`diveplan.dive.formatters`) turn a report into
 console text, JSON, or a Subsurface dive log; they never touch models or
 profiles directly, so a new output format is a single class.
 """
@@ -19,6 +19,7 @@ from diveplan.models.base import DecoState
 from diveplan.planning.gas_plan import (
     GasPlan,
     cns_percent,
+    deco_gas_consumption,
     gas_consumption,
     otu,
     rock_bottom,
@@ -52,6 +53,8 @@ class DiveReport:
         "runtime",
         "max_depth",
         "consumption_l",
+        "deco_consumption_l",
+        "max_tts",
         "cns",
         "otus",
         "rock_bottom_l",
@@ -67,6 +70,8 @@ class DiveReport:
     runtime: timedelta
     max_depth: Pressure
     consumption_l: tuple[tuple[Gas, float], ...]
+    deco_consumption_l: tuple[tuple[Gas, float], ...]
+    max_tts: timedelta
     cns: float
     otus: float
     rock_bottom_l: float
@@ -84,6 +89,8 @@ class DiveReport:
         runtime: timedelta,
         max_depth: Pressure,
         consumption_l: tuple[tuple[Gas, float], ...],
+        deco_consumption_l: tuple[tuple[Gas, float], ...],
+        max_tts: timedelta,
         cns: float,
         otus: float,
         rock_bottom_l: float,
@@ -98,6 +105,8 @@ class DiveReport:
         self.runtime = runtime
         self.max_depth = max_depth
         self.consumption_l = consumption_l
+        self.deco_consumption_l = deco_consumption_l
+        self.max_tts = max_tts
         self.cns = cns
         self.otus = otus
         self.rock_bottom_l = rock_bottom_l
@@ -112,6 +121,7 @@ class DiveReport:
         dive: Dive[DecoState],
         *,
         gas_plan: GasPlan | None = None,
+        max_tts: timedelta | None = None,
         tts_variations: TtsVariations | None = None,
     ) -> "DiveReport":
         """Assemble a report from a computed dive.
@@ -119,8 +129,14 @@ class DiveReport:
         Args:
             dive: The computed dive (normally the *full* dive, bottom plus
                 planned ascent — see :meth:`Dive.with_ascent`).
-            gas_plan: Unused for consumption (which follows the profile's
-                own gases) — reserved for future reserve summaries.
+            gas_plan: Deco gases available to the hypothetical ascents
+                behind ``max_tts``. Not used for consumption, which follows
+                the gases the profile actually breathes. Defaults to the
+                profile's own gases.
+            max_tts: Peak time-to-surface. Computed from `dive` when omitted
+                (:meth:`Dive.max_tts` — one ascent plan per segment
+                boundary); pass a precomputed value to skip that work, or
+                when the dive here is not the one the figure belongs to.
             tts_variations: The "+1 m / +1 min" figures. They are meaningful
                 for a *bottom-phase* dive, so compute them on the bottom
                 dive (``bottom.tts_variations()``) and pass them here; a
@@ -160,6 +176,8 @@ class DiveReport:
             runtime=profile.runtime,
             max_depth=max_pressure,
             consumption_l=tuple(gas_consumption(segments).items()),
+            deco_consumption_l=tuple(deco_gas_consumption(segments).items()),
+            max_tts=(dive.max_tts(gas_plan) if max_tts is None else max_tts),
             cns=cns_percent(segments),
             otus=otu(segments),
             rock_bottom_l=rock_bottom(max_pressure),
@@ -172,5 +190,6 @@ class DiveReport:
     def __repr__(self) -> str:
         return (
             f"DiveReport({self.model_name}, {len(self.rows)} rows, "
-            f"runtime={self.runtime}, max depth {self.max_depth.depth_m:.1f} m)"
+            f"runtime={self.runtime}, max depth {self.max_depth.depth_m:.1f} m, "
+            f"max TTS {self.max_tts.total_seconds() / 60:.0f} min)"
         )
